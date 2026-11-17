@@ -663,7 +663,57 @@ function renderFeed() {
   renderStoriesBar();
   el.feedContainer.innerHTML = "";
 
-  state.moments.forEach(m => {
+  // Filter moments pipeline
+  let filtered = state.moments;
+
+  // 1. Friend dropdown filter
+  if (state.selectedFriendFilter) {
+    filtered = filtered.filter(m => m.user_uid === state.selectedFriendFilter);
+  }
+
+  // 2. Search query filter
+  if (state.activeSearchQuery) {
+    const q = state.activeSearchQuery.toLowerCase().trim();
+    filtered = filtered.filter(m => {
+      const author = m.author || {};
+      const authorName = `${author.first_name || ""} ${author.last_name || ""}`.toLowerCase();
+      const username = (author.username || "").toLowerCase();
+      const caption = (m.caption || "").toLowerCase();
+      const overlayText = ((m.overlays && m.overlays[0] && m.overlays[0].data && m.overlays[0].data.text) || "").toLowerCase();
+      return authorName.includes(q) || username.includes(q) || caption.includes(q) || overlayText.includes(q);
+    });
+  }
+
+  // 3. Filter chip categories
+  if (state.activeFilterType === "favorites") {
+    filtered = filtered.filter(m => state.favorites.has(m.moment_uid));
+  } else if (state.activeFilterType === "photo") {
+    filtered = filtered.filter(m => !m.video_url);
+  } else if (state.activeFilterType === "video") {
+    filtered = filtered.filter(m => Boolean(m.video_url));
+  } else if (state.activeFilterType === "music") {
+    filtered = filtered.filter(m => {
+      const cap = (m.caption || "") + ((m.overlays && m.overlays[0] && m.overlays[0].data && m.overlays[0].data.text) || "");
+      return cap.includes("💿") || cap.includes("🎵") || cap.includes("ılı");
+    });
+  } else if (state.activeFilterType === "caption") {
+    filtered = filtered.filter(m => {
+      const cap = (m.caption || "") + ((m.overlays && m.overlays[0] && m.overlays[0].data && m.overlays[0].data.text) || "");
+      return cap.trim().length > 0;
+    });
+  }
+
+  if (filtered.length === 0) {
+    el.feedContainer.innerHTML = `
+      <div class="chat-empty">
+        <i class="fa-solid fa-filter-circle-xmark fa-2x text-muted"></i>
+        <span>Không tìm thấy khoảnh khắc phù hợp với bộ lọc hiện tại.</span>
+      </div>
+    `;
+    return;
+  }
+
+  filtered.forEach(m => {
     const card = document.createElement("div");
     card.className = "moment-card";
     card.id = `moment-${m.moment_uid}`;
@@ -672,6 +722,7 @@ function renderFeed() {
     const authorName = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
     const authorAvatar = author.profile_picture_url || getDefaultAvatar(authorName);
     const timeAgo = formatTimeAgo(m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null));
+    const isFav = state.favorites && state.favorites.has(m.moment_uid);
 
     // Media element
     const isVideo = Boolean(m.video_url);
@@ -723,7 +774,12 @@ function renderFeed() {
             <span class="moment-time">${timeAgo}</span>
           </div>
         </div>
-        ${deleteBtnHtml}
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="btn-fav-star ${isFav ? "active" : ""}" data-uid="${m.moment_uid}" title="${isFav ? "Bỏ yêu thích" : "Lưu vào yêu thích"}">
+            <i class="fa-${isFav ? "solid" : "regular"} fa-star"></i>
+          </button>
+          ${deleteBtnHtml}
+        </div>
       </div>
 
       <div class="moment-media-wrapper">
@@ -741,18 +797,21 @@ function renderFeed() {
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="🫶">🫶</button>
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="💛">💛</button>
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="😭">😭</button>
-        
+        </div>
+
         <div class="moment-comment-row">
           <input type="text" class="moment-comment-input" placeholder="Phản hồi tới ${escapeHtml(authorName)}..." data-moment="${m.moment_uid}" data-receiver="${m.user_uid}">
           <button class="btn btn-primary btn-sm btn-send-comment" title="Gửi"><i class="fa-solid fa-paper-plane"></i></button>
         </div>
-</div>
 
         <div class="moment-meta-bar">
           <span class="views-pill btn-view-reactions" data-uid="${m.moment_uid}">
             <i class="fa-solid fa-eye"></i> Xem cảm xúc & lượt xem
           </span>
           <div style="display:flex;gap:6px;">
+            <span class="views-pill btn-polaroid-moment" data-uid="${m.moment_uid}" title="Xuất thiệp Polaroid nghệ thuật">
+              <i class="fa-solid fa-image"></i> Polaroid
+            </span>
             <span class="views-pill btn-download-moment" data-url="${m.image_url || m.video_url}" title="Tải về">
               <i class="fa-solid fa-download"></i>
             </span>
@@ -773,6 +832,22 @@ function renderFeed() {
       });
     }
 
+    // Favorite toggle
+    const favBtn = card.querySelector(".btn-fav-star");
+    if (favBtn) {
+      favBtn.addEventListener("click", () => {
+        toggleFavorite(m.moment_uid);
+      });
+    }
+
+    // Polaroid button
+    const polBtn = card.querySelector(".btn-polaroid-moment");
+    if (polBtn) {
+      polBtn.addEventListener("click", () => {
+        openPolaroidModal(m.moment_uid);
+      });
+    }
+
     // Download button
     card.querySelector(".btn-download-moment").addEventListener("click", () => {
       const url = m.image_url || m.video_url;
@@ -785,7 +860,6 @@ function renderFeed() {
       a.remove();
     });
 
-    
     // Attach comment send
     const commentInput = card.querySelector(".moment-comment-input");
     const commentBtn = card.querySelector(".btn-send-comment");
@@ -2019,7 +2093,715 @@ function updateStatsAndLeaderboard() {
   });
 }
 
-// ================= App Start ================= //
+// ================= SEARCH, QUICK FILTER & FAVORITES ================= //
+function initFeedSearchAndFilters() {
+  const searchInput = document.getElementById("feed-search-input");
+  const clearBtn = document.getElementById("btn-clear-feed-search");
 
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.activeSearchQuery = e.target.value.trim();
+      if (clearBtn) {
+        if (state.activeSearchQuery) clearBtn.classList.remove("hidden");
+        else clearBtn.classList.add("hidden");
+      }
+      renderFeed();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      if (searchInput) searchInput.value = "";
+      state.activeSearchQuery = "";
+      clearBtn.classList.add("hidden");
+      renderFeed();
+    });
+  }
+
+  const chips = document.querySelectorAll(".filter-chip");
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      chips.forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      state.activeFilterType = chip.dataset.filter || "all";
+      renderFeed();
+    });
+  });
+}
+
+function loadFavorites() {
+  const uid = (state.user && state.user.uid) || "default";
+  try {
+    const raw = localStorage.getItem(`locket_favs_${uid}`);
+    state.favorites = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    state.favorites = new Set();
+  }
+  updateFavCount();
+}
+
+function toggleFavorite(momentUid) {
+  if (!state.favorites) state.favorites = new Set();
+  if (state.favorites.has(momentUid)) {
+    state.favorites.delete(momentUid);
+    showToast("Đã bỏ khỏi danh sách yêu thích.", "info");
+  } else {
+    state.favorites.add(momentUid);
+    playPopSound();
+    showToast("Đã lưu vào khoảnh khắc yêu thích! ⭐", "success");
+  }
+  const uid = (state.user && state.user.uid) || "default";
+  localStorage.setItem(`locket_favs_${uid}`, JSON.stringify(Array.from(state.favorites)));
+  updateFavCount();
+  renderFeed();
+}
+
+function updateFavCount() {
+  const favCountEl = document.getElementById("fav-count");
+  if (favCountEl) favCountEl.textContent = state.favorites ? state.favorites.size : 0;
+}
+
+function updateDailyStreak() {
+  const uid = (state.user && state.user.uid) || "default";
+  const today = new Date().toISOString().split("T")[0];
+  const lastActiveDate = localStorage.getItem(`locket_streak_date_${uid}`);
+  let currentStreak = parseInt(localStorage.getItem(`locket_streak_val_${uid}`) || "1", 10);
+
+  if (lastActiveDate) {
+    const lastD = new Date(lastActiveDate);
+    const currD = new Date(today);
+    const diffDays = Math.round((currD - lastD) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) {
+      currentStreak += 1;
+      localStorage.setItem(`locket_streak_val_${uid}`, currentStreak);
+      localStorage.setItem(`locket_streak_date_${uid}`, today);
+    } else if (diffDays > 1) {
+      currentStreak = 1;
+      localStorage.setItem(`locket_streak_val_${uid}`, currentStreak);
+      localStorage.setItem(`locket_streak_date_${uid}`, today);
+    }
+  } else {
+    localStorage.setItem(`locket_streak_val_${uid}`, 1);
+    localStorage.setItem(`locket_streak_date_${uid}`, today);
+  }
+
+  state.currentStreak = currentStreak;
+  const streakCountEl = document.getElementById("streak-days-count");
+  if (streakCountEl) streakCountEl.textContent = currentStreak;
+}
+
+// ================= POLAROID KEEPSAKE EXPORTER ================= //
+function openPolaroidModal(momentUid) {
+  const moment = state.moments.find(m => m.moment_uid === momentUid);
+  if (!moment) return;
+  state.activePolaroidMoment = moment;
+  state.polaroidFrameStyle = "classic";
+
+  const modal = document.getElementById("polaroid-modal");
+  const captionInput = document.getElementById("polaroid-caption-input");
+  if (captionInput) {
+    const rawCap = moment.caption || (moment.overlays && moment.overlays[0] && moment.overlays[0].data && moment.overlays[0].data.text) || "";
+    captionInput.value = rawCap;
+  }
+
+  document.querySelectorAll(".frame-style-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.style === "classic");
+  });
+
+  if (modal) modal.classList.remove("hidden");
+  renderPolaroidCanvas();
+}
+
+function renderPolaroidCanvas() {
+  const moment = state.activePolaroidMoment;
+  if (!moment) return;
+
+  const canvas = document.getElementById("polaroid-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = 600;
+  canvas.height = 780;
+
+  const style = state.polaroidFrameStyle || "classic";
+  let bgColor = "#ffffff";
+  let textColor = "#1c1c1e";
+  let subColor = "#8e8e93";
+  let innerBorder = "#ebebeb";
+  let stampColor = "#d4af37";
+
+  if (style === "dark") {
+    bgColor = "#181a1f";
+    textColor = "#f5f5f7";
+    subColor = "#8e8e93";
+    innerBorder = "#2c2f38";
+    stampColor = "#ffd700";
+  } else if (style === "vintage") {
+    bgColor = "#fcf5e5";
+    textColor = "#4a3c31";
+    subColor = "#8a7563";
+    innerBorder = "#e8dcbe";
+    stampColor = "#b8860b";
+  } else if (style === "gold") {
+    bgColor = "#141416";
+    textColor = "#ffd700";
+    subColor = "#ca8a04";
+    innerBorder = "#ca8a04";
+    stampColor = "#ffd700";
+  }
+
+  // Draw background card
+  ctx.fillStyle = bgColor;
+  ctx.beginPath();
+  drawRoundRect(ctx, 0, 0, 600, 780, 24);
+  ctx.fill();
+
+  // Subtle card border
+  ctx.strokeStyle = innerBorder;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  drawRoundRect(ctx, 1, 1, 598, 778, 24);
+  ctx.stroke();
+
+  // Photo Area: 520 x 520
+  const photoX = 40;
+  const photoY = 40;
+  const photoSize = 520;
+
+  ctx.fillStyle = "#000000";
+  ctx.beginPath();
+  drawRoundRect(ctx, photoX, photoY, photoSize, photoSize, 14);
+  ctx.fill();
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = moment.image_url || moment.thumbnail_url;
+  img.onload = () => {
+    ctx.save();
+    ctx.beginPath();
+    drawRoundRect(ctx, photoX, photoY, photoSize, photoSize, 14);
+    ctx.clip();
+
+    // Cover crop
+    const aspect = img.width / img.height;
+    let sWidth = img.width;
+    let sHeight = img.height;
+    let sx = 0;
+    let sy = 0;
+    if (aspect > 1) {
+      sWidth = img.height;
+      sx = (img.width - sWidth) / 2;
+    } else {
+      sHeight = img.width;
+      sy = (img.height - sHeight) / 2;
+    }
+    ctx.drawImage(img, sx, sy, sWidth, sHeight, photoX, photoY, photoSize, photoSize);
+    ctx.restore();
+
+    // Bottom info
+    const author = moment.author || {};
+    const authorName = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+    const dateObj = moment.date ? new Date(moment.date) : (moment.created_at ? new Date(parseInt(moment.created_at) * 1000) : new Date());
+    const dateFormatted = `${dateObj.getHours().toString().padStart(2, "0")}:${dateObj.getMinutes().toString().padStart(2, "0")} • ${dateObj.getDate()} thg ${dateObj.getMonth() + 1}, ${dateObj.getFullYear()}`;
+
+    const captionInput = document.getElementById("polaroid-caption-input");
+    const noteText = captionInput ? captionInput.value.trim() : (moment.caption || "");
+
+    // Author
+    ctx.fillStyle = textColor;
+    ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillText(authorName, 44, 600);
+
+    // Meta
+    ctx.fillStyle = subColor;
+    ctx.font = "14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillText(`@${author.username || "locket"} • ${dateFormatted}`, 44, 626);
+
+    // Note / Caption
+    if (noteText) {
+      ctx.fillStyle = textColor;
+      ctx.font = "italic 21px 'Segoe UI', cursive, sans-serif";
+      ctx.fillText(`"${noteText}"`, 44, 674, 510);
+    }
+
+    // Gold watermark stamp
+    ctx.fillStyle = stampColor;
+    ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText("✦ LOCKET BY TUNGGG", 556, 730);
+
+    ctx.fillStyle = subColor;
+    ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText("Chụp và lưu giữ kỷ niệm đẹp", 556, 748);
+    ctx.textAlign = "left";
+  };
+}
+
+function drawRoundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function initPolaroidListeners() {
+  const closeBtn = document.getElementById("btn-close-polaroid-modal");
+  const modal = document.getElementById("polaroid-modal");
+  if (closeBtn && modal) {
+    closeBtn.addEventListener("click", () => modal.classList.add("hidden"));
+  }
+
+  const styleBtns = document.querySelectorAll(".frame-style-btn");
+  styleBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      styleBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.polaroidFrameStyle = btn.dataset.style;
+      renderPolaroidCanvas();
+    });
+  });
+
+  const captionInput = document.getElementById("polaroid-caption-input");
+  if (captionInput) {
+    captionInput.addEventListener("input", () => {
+      renderPolaroidCanvas();
+    });
+  }
+
+  const downloadBtn = document.getElementById("btn-download-polaroid");
+  if (downloadBtn) {
+    downloadBtn.addEventListener("click", () => {
+      const canvas = document.getElementById("polaroid-canvas");
+      if (!canvas) return;
+      playPopSound();
+      const a = document.createElement("a");
+      a.download = `locket-polaroid-${Date.now()}.png`;
+      a.href = canvas.toDataURL("image/png");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast("Đã tải ảnh Polaroid thành công!", "success");
+    });
+  }
+
+  const copyBtn = document.getElementById("btn-copy-polaroid");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const canvas = document.getElementById("polaroid-canvas");
+      if (!canvas) return;
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        try {
+          navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          playPopSound();
+          showToast("Đã sao chép ảnh Polaroid vào bộ nhớ tạm!", "success");
+        } catch (e) {
+          showToast("Trình duyệt không hỗ trợ sao chép ảnh trực tiếp.", "error");
+        }
+      });
+    });
+  }
+}
+
+// ================= CINEMATIC SLIDESHOW ================= //
+let ambientOsc1 = null;
+let ambientOsc2 = null;
+let ambientGain = null;
+
+function startAmbientChillMusic() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+
+    ambientGain = ctx.createGain();
+    ambientGain.gain.setValueAtTime(0.01, ctx.currentTime);
+    ambientGain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 1.5);
+
+    // Warm Chord Pad (Cmaj7 arpeggiation)
+    ambientOsc1 = ctx.createOscillator();
+    ambientOsc1.type = "sine";
+    ambientOsc1.frequency.setValueAtTime(261.63, ctx.currentTime); // C4
+
+    ambientOsc2 = ctx.createOscillator();
+    ambientOsc2.type = "triangle";
+    ambientOsc2.frequency.setValueAtTime(329.63, ctx.currentTime); // E4
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(600, ctx.currentTime);
+
+    ambientOsc1.connect(filter);
+    ambientOsc2.connect(filter);
+    filter.connect(ambientGain);
+    ambientGain.connect(ctx.destination);
+
+    ambientOsc1.start();
+    ambientOsc2.start();
+  } catch (e) {}
+}
+
+function stopAmbientChillMusic() {
+  try {
+    if (ambientGain) {
+      ambientGain.gain.exponentialRampToValueAtTime(0.001, getAudioContext().currentTime + 0.5);
+      setTimeout(() => {
+        if (ambientOsc1) ambientOsc1.stop();
+        if (ambientOsc2) ambientOsc2.stop();
+        ambientOsc1 = null;
+        ambientOsc2 = null;
+        ambientGain = null;
+      }, 500);
+    }
+  } catch (e) {}
+}
+
+function openSlideshowModal() {
+  if (!state.moments || state.moments.length === 0) {
+    showToast("Không có khoảnh khắc nào để trình chiếu.", "info");
+    return;
+  }
+
+  state.slideshowIndex = 0;
+  state.slideshowPlaying = true;
+  state.slideshowAudioEnabled = false;
+
+  const modal = document.getElementById("slideshow-modal");
+  if (modal) modal.classList.remove("hidden");
+
+  showSlideshowMoment(state.slideshowIndex);
+  startSlideshowTimer();
+}
+
+function closeSlideshowModal() {
+  const modal = document.getElementById("slideshow-modal");
+  if (modal) modal.classList.add("hidden");
+  stopSlideshowTimer();
+  stopAmbientChillMusic();
+  const vid = document.getElementById("slideshow-vid");
+  if (vid) vid.pause();
+}
+
+function showSlideshowMoment(index) {
+  if (!state.moments || state.moments.length === 0) return;
+  const m = state.moments[index];
+  if (!m) return;
+
+  const author = m.author || {};
+  const authorName = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+  const authorAvatar = author.profile_picture_url || getDefaultAvatar(authorName);
+  const timeAgo = formatTimeAgo(m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null));
+
+  const avatarEl = document.getElementById("slideshow-avatar");
+  const nameEl = document.getElementById("slideshow-author-name");
+  const timeEl = document.getElementById("slideshow-time");
+  const imgEl = document.getElementById("slideshow-img");
+  const vidEl = document.getElementById("slideshow-vid");
+  const curIdxEl = document.getElementById("slideshow-current-index");
+  const totalEl = document.getElementById("slideshow-total-count");
+
+  if (avatarEl) avatarEl.src = authorAvatar;
+  if (nameEl) nameEl.textContent = authorName;
+  if (timeEl) timeEl.textContent = timeAgo;
+  if (curIdxEl) curIdxEl.textContent = index + 1;
+  if (totalEl) totalEl.textContent = state.moments.length;
+
+  const isVideo = Boolean(m.video_url);
+  if (isVideo) {
+    if (imgEl) imgEl.classList.add("hidden");
+    if (vidEl) {
+      vidEl.src = m.video_url;
+      vidEl.classList.remove("hidden");
+      vidEl.play().catch(() => {});
+    }
+  } else {
+    if (vidEl) {
+      vidEl.pause();
+      vidEl.classList.add("hidden");
+    }
+    if (imgEl) {
+      imgEl.src = m.image_url || m.thumbnail_url;
+      imgEl.classList.remove("hidden");
+      // Trigger Ken Burns re-animation
+      imgEl.classList.remove("ken-burns");
+      void imgEl.offsetWidth;
+      imgEl.classList.add("ken-burns");
+    }
+  }
+
+  // Overlay text
+  const overlayPill = document.getElementById("slideshow-overlay-pill");
+  const overlayIcon = document.getElementById("slideshow-overlay-icon");
+  const overlayText = document.getElementById("slideshow-overlay-text");
+
+  const cap = m.caption || (m.overlays && m.overlays[0] && m.overlays[0].data && m.overlays[0].data.text) || "";
+  if (cap && overlayPill) {
+    overlayPill.classList.remove("hidden");
+    if (overlayText) overlayText.textContent = cap;
+    if (overlayIcon) overlayIcon.textContent = (m.overlays && m.overlays[0] && m.overlays[0].data && formatOverlayIcon(m.overlays[0].data.icon)) || "";
+  } else if (overlayPill) {
+    overlayPill.classList.add("hidden");
+  }
+
+  // Reset progress bar
+  const progressFill = document.getElementById("slideshow-progress-fill");
+  if (progressFill) {
+    progressFill.style.transition = "none";
+    progressFill.style.width = "0%";
+    setTimeout(() => {
+      progressFill.style.transition = "width 5s linear";
+      progressFill.style.width = "100%";
+    }, 50);
+  }
+}
+
+function startSlideshowTimer() {
+  stopSlideshowTimer();
+  state.slideshowTimer = setInterval(() => {
+    if (!state.slideshowPlaying) return;
+    state.slideshowIndex = (state.slideshowIndex + 1) % state.moments.length;
+    showSlideshowMoment(state.slideshowIndex);
+  }, 5000);
+}
+
+function stopSlideshowTimer() {
+  if (state.slideshowTimer) {
+    clearInterval(state.slideshowTimer);
+    state.slideshowTimer = null;
+  }
+}
+
+function initSlideshowListeners() {
+  const btnOpen = document.getElementById("btn-open-slideshow");
+  if (btnOpen) btnOpen.addEventListener("click", openSlideshowModal);
+
+  const btnClose = document.getElementById("btn-close-slideshow");
+  if (btnClose) btnClose.addEventListener("click", closeSlideshowModal);
+
+  const btnPrev = document.getElementById("btn-slideshow-prev");
+  if (btnPrev) {
+    btnPrev.addEventListener("click", () => {
+      state.slideshowIndex = (state.slideshowIndex - 1 + state.moments.length) % state.moments.length;
+      showSlideshowMoment(state.slideshowIndex);
+      startSlideshowTimer();
+    });
+  }
+
+  const btnNext = document.getElementById("btn-slideshow-next");
+  if (btnNext) {
+    btnNext.addEventListener("click", () => {
+      state.slideshowIndex = (state.slideshowIndex + 1) % state.moments.length;
+      showSlideshowMoment(state.slideshowIndex);
+      startSlideshowTimer();
+    });
+  }
+
+  const btnPlay = document.getElementById("btn-toggle-slideshow-play");
+  if (btnPlay) {
+    btnPlay.addEventListener("click", () => {
+      state.slideshowPlaying = !state.slideshowPlaying;
+      btnPlay.innerHTML = state.slideshowPlaying ? `<i class="fa-solid fa-pause"></i>` : `<i class="fa-solid fa-play"></i>`;
+      if (state.slideshowPlaying) startSlideshowTimer();
+      else stopSlideshowTimer();
+    });
+  }
+
+  const btnAudio = document.getElementById("btn-toggle-slideshow-audio");
+  if (btnAudio) {
+    btnAudio.addEventListener("click", () => {
+      state.slideshowAudioEnabled = !state.slideshowAudioEnabled;
+      btnAudio.style.color = state.slideshowAudioEnabled ? "var(--accent-yellow)" : "#fff";
+      if (state.slideshowAudioEnabled) {
+        startAmbientChillMusic();
+        showToast("Đã bật nhạc nền thư giãn 🎵", "info");
+      } else {
+        stopAmbientChillMusic();
+        showToast("Đã tắt nhạc nền.", "info");
+      }
+    });
+  }
+
+  const btnPolaroidFromSlide = document.getElementById("btn-slideshow-polaroid");
+  if (btnPolaroidFromSlide) {
+    btnPolaroidFromSlide.addEventListener("click", () => {
+      const current = state.moments[state.slideshowIndex];
+      if (current) openPolaroidModal(current.moment_uid);
+    });
+  }
+}
+
+// ================= IOS WIDGET SIMULATOR ================= //
+let widgetClockInterval = null;
+
+function openWidgetSimulatorModal() {
+  const modal = document.getElementById("widget-simulator-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+
+  // Populate latest moment
+  const m = state.moments && state.moments[0];
+  if (m) {
+    const author = m.author || {};
+    const name = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+    const avatar = author.profile_picture_url || getDefaultAvatar(name);
+    const timeAgo = formatTimeAgo(m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null));
+
+    const imgEl = document.getElementById("widget-moment-img");
+    const avatarEl = document.getElementById("widget-author-avatar");
+    const nameEl = document.getElementById("widget-author-name");
+    const timeEl = document.getElementById("widget-time-tag");
+    const capEl = document.getElementById("widget-caption-tag");
+
+    if (imgEl) imgEl.src = m.image_url || m.thumbnail_url;
+    if (avatarEl) avatarEl.src = avatar;
+    if (nameEl) nameEl.textContent = name;
+    if (timeEl) timeEl.textContent = timeAgo;
+
+    const capText = m.caption || (m.overlays && m.overlays[0] && m.overlays[0].data && m.overlays[0].data.text) || "";
+    if (capEl) {
+      if (capText) {
+        capEl.textContent = capText;
+        capEl.classList.remove("hidden");
+      } else {
+        capEl.classList.add("hidden");
+      }
+    }
+  }
+
+  // Update clock
+  updateWidgetStatusClock();
+  if (!widgetClockInterval) {
+    widgetClockInterval = setInterval(updateWidgetStatusClock, 1000);
+  }
+}
+
+function updateWidgetStatusClock() {
+  const timeEl = document.getElementById("ios-status-time");
+  if (timeEl) {
+    const now = new Date();
+    timeEl.textContent = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+  }
+}
+
+function initWidgetSimListeners() {
+  const btnOpen = document.getElementById("btn-open-widget-simulator");
+  if (btnOpen) btnOpen.addEventListener("click", openWidgetSimulatorModal);
+
+  const btnClose = document.getElementById("btn-close-widget-sim");
+  const modal = document.getElementById("widget-simulator-modal");
+  if (btnClose && modal) {
+    btnClose.addEventListener("click", () => {
+      modal.classList.add("hidden");
+      if (widgetClockInterval) {
+        clearInterval(widgetClockInterval);
+        widgetClockInterval = null;
+      }
+    });
+  }
+
+  const sizeBtns = document.querySelectorAll(".widget-size-btn");
+  const widgetBox = document.getElementById("ios-locket-widget");
+  sizeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      sizeBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const size = btn.dataset.size;
+      if (widgetBox) {
+        widgetBox.classList.remove("widget-size-small", "widget-size-medium", "widget-size-large");
+        widgetBox.classList.add(`widget-size-${size}`);
+      }
+    });
+  });
+
+  const btnDownloadScreenshot = document.getElementById("btn-download-widget-screenshot");
+  if (btnDownloadScreenshot) {
+    btnDownloadScreenshot.addEventListener("click", () => {
+      showToast("Đang chuẩn bị chụp màn hình Widget...", "info");
+      playShutterSound();
+
+      // Draw simulated homescreen on a canvas
+      const canvas = document.createElement("canvas");
+      canvas.width = 750;
+      canvas.height = 1334;
+      const ctx = canvas.getContext("2d");
+
+      // Draw background gradient
+      const grad = ctx.createLinearGradient(0, 0, 750, 1334);
+      grad.addColorStop(0, "#182848");
+      grad.addColorStop(1, "#4b6cb7");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 750, 1334);
+
+      // Status bar time
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 32px -apple-system, sans-serif";
+      const now = new Date();
+      ctx.fillText(`${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`, 60, 80);
+
+      // Status icons text
+      ctx.font = "24px -apple-system, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("5G  100%", 690, 80);
+      ctx.textAlign = "left";
+
+      // Draw Locket Widget Box
+      const widgetX = 50;
+      const widgetY = 140;
+      const widgetW = 650;
+      const widgetH = 400;
+
+      ctx.fillStyle = "#000000";
+      drawRoundRect(ctx, widgetX, widgetY, widgetW, widgetH, 44);
+      ctx.fill();
+
+      const imgEl = document.getElementById("widget-moment-img");
+      if (imgEl && imgEl.src) {
+        const simImg = new Image();
+        simImg.crossOrigin = "anonymous";
+        simImg.src = imgEl.src;
+        simImg.onload = () => {
+          ctx.save();
+          drawRoundRect(ctx, widgetX, widgetY, widgetW, widgetH, 44);
+          ctx.clip();
+          ctx.drawImage(simImg, widgetX, widgetY, widgetW, widgetH);
+          ctx.restore();
+
+          // Brand Watermark
+          ctx.fillStyle = "#ffd700";
+          ctx.font = "bold 24px -apple-system, sans-serif";
+          ctx.fillText("✦ Locket by Tunggg Widget", 60, 1260);
+
+          const a = document.createElement("a");
+          a.download = `locket-widget-homescreen.png`;
+          a.href = canvas.toDataURL("image/png");
+          a.click();
+          showToast("Đã tải ảnh chụp màn hình Widget!", "success");
+        };
+      }
+    });
+  }
+}
+
+// Attach all mega feature listeners
+initFeedSearchAndFilters();
+initPolaroidListeners();
+initSlideshowListeners();
+initWidgetSimListeners();
+
+// Hook favorites and streak on load
+const origRenderCurrentUser = renderCurrentUser;
+renderCurrentUser = function() {
+  origRenderCurrentUser();
+  loadFavorites();
+  updateDailyStreak();
+};
+
+// ================= App Start ================= //
 
 checkAuthStatus();

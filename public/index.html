@@ -155,6 +155,48 @@
           </div>
         </div>
 
+        <!-- Feed Toolbar: Search, Filters, Streak & Interactive Tools -->
+        <div class="feed-toolbar">
+          <div class="feed-search-row">
+            <div class="search-input-wrap">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="feed-search-input" placeholder="Tìm kiếm theo bạn bè, caption, #hashtag..." autocomplete="off">
+              <button id="btn-clear-feed-search" class="clear-search-btn hidden" title="Xóa tìm kiếm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="feed-toolbar-actions">
+              <!-- Streak Pill -->
+              <div id="streak-pill" class="streak-pill" title="Chuỗi ngày Locket liên tiếp!">
+                <span class="streak-fire">🔥</span>
+                <span id="streak-days-count" class="streak-count">1</span>
+                <span class="streak-label">ngày</span>
+              </div>
+
+              <!-- Slideshow Button -->
+              <button id="btn-open-slideshow" class="btn btn-secondary btn-sm" title="Trình chiếu kỷ niệm điện ảnh">
+                <i class="fa-solid fa-film text-yellow"></i>
+                <span>Trình Chiếu</span>
+              </button>
+
+              <!-- Widget Simulator Button -->
+              <button id="btn-open-widget-simulator" class="btn btn-secondary btn-sm" title="Mô phỏng Widget iOS trên iPhone">
+                <i class="fa-solid fa-mobile-screen text-yellow"></i>
+                <span>Widget iOS</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Filter Tags -->
+          <div class="filter-chips-row">
+            <button class="filter-chip active" data-filter="all">👥 Tất cả</button>
+            <button class="filter-chip" data-filter="favorites">⭐ Yêu thích (<span id="fav-count">0</span>)</button>
+            <button class="filter-chip" data-filter="photo">📸 Chỉ ảnh</button>
+            <button class="filter-chip" data-filter="video">🎥 Chỉ video</button>
+            <button class="filter-chip" data-filter="music">🎵 Có nhạc</button>
+            <button class="filter-chip" data-filter="caption">💬 Có caption</button>
+          </div>
+        </div>
+
         <!-- Stories Carousel Bar -->
         <div class="stories-section">
           <div id="stories-bar" class="stories-bar">
@@ -699,6 +741,157 @@
     </div>
     <div id="lightbox-content" style="max-width:90vw;max-height:85vh;display:flex;align-items:center;justify-content:center;">
       <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Modal: Polaroid Keepsake Exporter -->
+  <div id="polaroid-modal" class="modal-backdrop hidden">
+    <div class="modal-box polaroid-modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-image text-yellow"></i> Thiệp Kỷ Niệm Polaroid</h3>
+        <button id="btn-close-polaroid-modal" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body polaroid-modal-body">
+        <div class="polaroid-preview-container">
+          <canvas id="polaroid-canvas" width="600" height="780"></canvas>
+        </div>
+        <div class="polaroid-controls">
+          <div class="polaroid-control-group">
+            <label><i class="fa-solid fa-palette"></i> Phong cách viền</label>
+            <div class="polaroid-themes-picker">
+              <button class="frame-style-btn active" data-style="classic">⚪ Cổ Điển</button>
+              <button class="frame-style-btn" data-style="dark">⚫ Huyền Bí</button>
+              <button class="frame-style-btn" data-style="vintage">📜 Giấy Vintage</button>
+              <button class="frame-style-btn" data-style="gold">✨ Vàng Gold</button>
+            </div>
+          </div>
+          <div class="polaroid-control-group">
+            <label><i class="fa-solid fa-pen-nib"></i> Lời nhắn ghi chú (Tùy chỉnh)</label>
+            <input type="text" id="polaroid-caption-input" class="form-input" placeholder="Ghi chú thiệp kỷ niệm..." maxlength="120">
+          </div>
+          <div class="polaroid-actions-row">
+            <button id="btn-download-polaroid" class="btn btn-primary btn-block">
+              <i class="fa-solid fa-download"></i> Tải Ảnh Polaroid (PNG)
+            </button>
+            <button id="btn-copy-polaroid" class="btn btn-secondary">
+              <i class="fa-regular fa-copy"></i> Sao chép
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cinematic Slideshow -->
+  <div id="slideshow-modal" class="slideshow-backdrop hidden">
+    <div class="slideshow-progress-bar">
+      <div id="slideshow-progress-fill" class="slideshow-progress-fill"></div>
+    </div>
+    <div class="slideshow-header">
+      <div class="slideshow-author">
+        <img id="slideshow-avatar" src="" alt="Avatar" class="avatar-circle">
+        <div>
+          <span id="slideshow-author-name" class="slideshow-name">Tên bạn bè</span>
+          <span id="slideshow-time" class="slideshow-time-ago">Vừa xong</span>
+        </div>
+      </div>
+      <div class="slideshow-top-controls">
+        <button id="btn-toggle-slideshow-audio" class="btn-icon" title="Bật/Tắt nhạc nền Chill"><i class="fa-solid fa-music"></i></button>
+        <button id="btn-toggle-slideshow-play" class="btn-icon" title="Tạm dừng/Tiếp tục"><i class="fa-solid fa-pause"></i></button>
+        <button id="btn-close-slideshow" class="btn-icon" title="Thoát trình chiếu"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div class="slideshow-stage" id="slideshow-stage">
+      <div class="slideshow-nav-btn prev" id="btn-slideshow-prev"><i class="fa-solid fa-chevron-left"></i></div>
+      <div class="slideshow-nav-btn next" id="btn-slideshow-next"><i class="fa-solid fa-chevron-right"></i></div>
+      <div class="slideshow-media-box" id="slideshow-media-box">
+        <img id="slideshow-img" class="slideshow-media ken-burns" alt="Slideshow Moment">
+        <video id="slideshow-vid" class="slideshow-media hidden" playsinline></video>
+        <div id="slideshow-overlay-pill" class="locket-overlay hidden">
+          <span id="slideshow-overlay-icon" class="overlay-icon"></span>
+          <span id="slideshow-overlay-text" class="overlay-text"></span>
+        </div>
+      </div>
+    </div>
+    <div class="slideshow-footer">
+      <div class="slideshow-counter">
+        <span id="slideshow-current-index">1</span> / <span id="slideshow-total-count">1</span>
+      </div>
+      <button id="btn-slideshow-polaroid" class="btn btn-secondary btn-sm">
+        <i class="fa-solid fa-image"></i> Xuất Polaroid này
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal: iOS Widget Simulator -->
+  <div id="widget-simulator-modal" class="modal-backdrop hidden">
+    <div class="modal-box widget-sim-modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-brands fa-apple text-yellow"></i> Mô Phỏng Widget iPhone</h3>
+        <button id="btn-close-widget-sim" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body widget-sim-body">
+        <div class="widget-size-selector">
+          <button class="widget-size-btn active" data-size="small">📱 Nhỏ (2x2)</button>
+          <button class="widget-size-btn" data-size="medium">📱 Trung Bình (4x2)</button>
+          <button class="widget-size-btn" data-size="large">📱 Lớn (4x4)</button>
+        </div>
+
+        <div class="iphone-homescreen-frame" id="iphone-homescreen">
+          <div class="ios-status-bar">
+            <span class="ios-time" id="ios-status-time">09:41</span>
+            <div class="ios-status-icons">
+              <i class="fa-solid fa-signal"></i>
+              <i class="fa-solid fa-wifi"></i>
+              <i class="fa-solid fa-battery-full"></i>
+            </div>
+          </div>
+
+          <div class="ios-grid-container" id="ios-grid-container">
+            <div class="ios-locket-widget widget-size-small" id="ios-locket-widget">
+              <img id="widget-moment-img" src="" alt="Widget Moment" class="widget-media">
+              <div class="widget-meta-overlay">
+                <div class="widget-author-tag">
+                  <img id="widget-author-avatar" src="" alt="Avatar" class="widget-avatar-circle">
+                  <span id="widget-author-name">Bạn bè</span>
+                </div>
+                <span id="widget-time-tag" class="widget-time">2 giờ trước</span>
+              </div>
+              <div id="widget-caption-tag" class="widget-caption-pill hidden"></div>
+            </div>
+
+            <div class="ios-app-icon" id="fake-app-1">
+              <div class="app-icon-squircle messages-icon"><i class="fa-solid fa-comment"></i></div>
+              <span class="app-label">Tin nhắn</span>
+            </div>
+            <div class="ios-app-icon" id="fake-app-2">
+              <div class="app-icon-squircle photos-icon"><i class="fa-solid fa-images"></i></div>
+              <span class="app-label">Ảnh</span>
+            </div>
+            <div class="ios-app-icon" id="fake-app-3">
+              <div class="app-icon-squircle camera-icon"><i class="fa-solid fa-camera"></i></div>
+              <span class="app-label">Camera</span>
+            </div>
+            <div class="ios-app-icon" id="fake-app-4">
+              <div class="app-icon-squircle music-icon"><i class="fa-solid fa-music"></i></div>
+              <span class="app-label">Nhạc</span>
+            </div>
+          </div>
+
+          <div class="ios-dock">
+            <div class="dock-app phone-dock"><i class="fa-solid fa-phone"></i></div>
+            <div class="dock-app safari-dock"><i class="fa-solid fa-compass"></i></div>
+            <div class="dock-app mail-dock"><i class="fa-solid fa-envelope"></i></div>
+            <div class="dock-app music-dock"><i class="fa-solid fa-music"></i></div>
+          </div>
+        </div>
+
+        <div class="widget-sim-actions">
+          <button id="btn-download-widget-screenshot" class="btn btn-primary btn-block">
+            <i class="fa-solid fa-camera"></i> Chụp & Tải Màn Hình Widget
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
