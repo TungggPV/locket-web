@@ -464,13 +464,13 @@ function renderFriendsGrid(friendsList) {
     const card = document.createElement("div");
     card.className = "friend-card";
     card.innerHTML = `
-      <img src="${f.profile_picture_url || getDefaultAvatar(name)}" alt="${name}" class="friend-card-avatar">
+      <img src="${f.profile_picture_url || getDefaultAvatar(name)}" alt="${escapeHtml(name)}" class="friend-card-avatar">
       <div class="friend-card-info">
-        <h4 class="friend-card-name">${name}</h4>
-        <span class="friend-card-handle">@${f.username || ""}</span>
+        <h4 class="friend-card-name">${escapeHtml(name)}</h4>
+        <span class="friend-card-handle">@${escapeHtml(f.username || "")}</span>
       </div>
       <div class="friend-card-actions">
-        <button class="btn btn-secondary btn-sm btn-open-chat" data-uid="${f.uid}" data-name="${name}" title="Nhắn tin">
+        <button class="btn btn-secondary btn-sm btn-open-chat" data-uid="${escapeHtml(f.uid)}" data-name="${escapeHtml(name)}" title="Nhắn tin">
           <i class="fa-regular fa-comment-dots"></i>
         </button>
       </div>
@@ -538,18 +538,19 @@ async function loadFriendRequests() {
       el.friendRequestsBox.classList.remove("hidden");
       el.incomingRequestsList.innerHTML = "";
       incoming.forEach(req => {
+        const uidStr = String(req.user_uid || req.uid || "");
         const item = document.createElement("div");
         item.className = "friend-card";
         item.innerHTML = `
           <div class="friend-card-info">
-            <h4>Lời mời từ UID: ${req.user_uid || req.uid}</h4>
+            <h4>Lời mời từ UID: ${escapeHtml(uidStr)}</h4>
           </div>
-          <button class="btn btn-primary btn-sm btn-accept" data-uid="${req.user_uid || req.uid}">
+          <button class="btn btn-primary btn-sm btn-accept" data-uid="${escapeHtml(uidStr)}">
             <i class="fa-solid fa-check"></i> Chấp nhận
           </button>
         `;
         item.querySelector(".btn-accept").addEventListener("click", async () => {
-          await acceptFriendRequest(req.user_uid || req.uid);
+          await acceptFriendRequest(uidStr);
         });
         el.incomingRequestsList.appendChild(item);
       });
@@ -1565,10 +1566,14 @@ if (btnTakeSnapshot) {
 
 // Lightbox
 function openLightbox(mediaUrl, isVideo = false) {
-  currentLightboxUrl = mediaUrl;
+  if (!mediaUrl || typeof mediaUrl !== "string") return;
+  const safeUrl = mediaUrl.trim();
+  if (!/^(https?:\/\/|blob:|data:)/i.test(safeUrl)) return;
+
+  currentLightboxUrl = safeUrl;
   lightboxContent.innerHTML = isVideo
-    ? `<video src="${mediaUrl}" class="lightbox-video" controls autoplay playsinline loop></video>`
-    : `<img src="${mediaUrl}" class="lightbox-img" alt="Lightbox">`;
+    ? `<video src="${escapeHtml(safeUrl)}" class="lightbox-video" controls autoplay playsinline loop></video>`
+    : `<img src="${escapeHtml(safeUrl)}" class="lightbox-img" alt="Lightbox">`;
   lightboxModal.classList.remove("hidden");
 }
 

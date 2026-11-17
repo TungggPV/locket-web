@@ -2,6 +2,8 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const multer = require("multer");
 const { LocketClient, NoteType, DeviceProfile } = require("./");
 
@@ -22,27 +24,117 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 
+// Enable trust proxy for cloud hosting (Render, Vercel, reverse proxies)
+app.set("trust proxy", 1);
+
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Multer storage for temporary uploads
+// ================= SECURITY HEADERS (HELMET) ================= //
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+      mediaSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+      connectSrc: ["'self'", "https:", "wss:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// ================= RATE LIMITING ================= //
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 150, // max 150 requests per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "RATE_LIMIT_EXCEEDED",
+    message: "Quá nhiều yêu cầu từ địa chỉ IP này. Vui lòng thử lại sau giây lát."
+  }
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // max 15 login attempts per 15 mins per IP to protect against brute-force
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "TOO_MANY_LOGIN_ATTEMPTS",
+    message: "Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 15 phút."
+  }
+});
+
+// Apply rate limiting to all API routes
+app.use("/api/", apiLimiter);
+
+// ================= MULTER FILE UPLOAD HARDENING ================= //
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-m4v"
+]);
+
+const ALLOWED_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".mp4", ".mov", ".webm", ".m4v"
+]);
+
+const fileFilter = (req, file, cb) => {
+  const mime = (file.mimetype || "").toLowerCase();
+  const ext = path.extname(file.originalname || "").toLowerCase();
+
+  if (!ALLOWED_MIME_TYPES.has(mime) && !ALLOWED_EXTENSIONS.has(ext)) {
+    return cb(new Error("Định dạng tệp không được hỗ trợ. Chỉ chấp nhận ảnh (JPG, PNG, WEBP, HEIC) hoặc video (MP4, MOV, WEBM)."), false);
+  }
+  cb(null, true);
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname) || ".tmp";
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+    let ext = path.extname(file.originalname || "").toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      ext = ".jpg";
+    }
+    cb(null, `upload-${uniqueSuffix}${ext}`);
   }
 });
+
 const upload = multer({
   storage,
-  limits: { fileSize: 150 * 1024 * 1024 } // 150MB max for video
+  fileFilter,
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB max per file
+    files: 1
+  }
 });
 
-app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// CORS configuration
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+
+// Body parsers with safe limits (2MB max for text/JSON)
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // Load presets
@@ -56,17 +148,22 @@ try {
 // Helper: Restore client per request from header - NEVER save to disk
 function getClient(req) {
   const header = req.headers["x-locket-session"];
-  if (!header) return null;
+  if (!header || typeof header !== "string") return null;
+  if (header.length > 16384) return null; // Prevent oversized token DoS
+
   try {
     const raw = Buffer.from(header, "base64").toString("utf8");
     const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return null;
+    if (!data.uid || !data.idToken) return null;
+
     const client = new LocketClient({ sessionPath: null });
-    client.session.uid = data.uid;
-    client.session.email = data.email;
-    client.session.idToken = data.idToken;
-    client.session.refreshToken = data.refreshToken;
-    client.session.expiresAt = data.expiresAt || 0;
-    if (data.device) {
+    client.session.uid = String(data.uid);
+    client.session.email = String(data.email || "");
+    client.session.idToken = String(data.idToken);
+    client.session.refreshToken = String(data.refreshToken || "");
+    client.session.expiresAt = Number(data.expiresAt) || 0;
+    if (data.device && typeof data.device === "object") {
       client.session.device = DeviceProfile.fromDict(data.device);
       client.device = client.session.device;
     }
@@ -106,10 +203,13 @@ app.get("/api/auth/status", async (req, res) => {
 });
 
 // 2. Login - Returns sessionData to browser without writing to server disk
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
+  if (!email || !password || typeof email !== "string" || typeof password !== "string") {
     return res.status(400).json({ error: "Email và mật khẩu là bắt buộc." });
+  }
+  if (email.length > 254 || password.length > 256) {
+    return res.status(400).json({ error: "Email hoặc mật khẩu không hợp lệ." });
   }
 
   try {
@@ -522,6 +622,24 @@ app.post("/api/chat/send", requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Global Error Handling Middleware
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "FILE_TOO_LARGE", message: "Kích thước tệp quá lớn (Tối đa 100MB)." });
+    }
+    return res.status(400).json({ error: "UPLOAD_ERROR", message: err.message });
+  }
+  if (err) {
+    console.error("[Security/Server Error]:", err.message);
+    return res.status(err.status || 500).json({
+      error: "SERVER_ERROR",
+      message: err.message || "Đã xảy ra lỗi máy chủ."
+    });
+  }
+  next();
 });
 
 // Fallback to index.html for SPA
