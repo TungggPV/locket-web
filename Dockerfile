@@ -1,11 +1,8 @@
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
-# Install system dependencies (ffmpeg and build tools)
+# Install ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    python3 \
-    make \
-    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
