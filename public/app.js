@@ -274,6 +274,8 @@ function switchTab(tabId) {
 
   if (tabId === "feed" && state.moments.length === 0) {
     loadFeed();
+  } else if (tabId === "memories") {
+    renderCalendar();
   } else if (tabId === "chat") {
     loadConversations();
   } else if (tabId === "friends" && state.friends.length === 0) {
@@ -923,6 +925,10 @@ function renderFeed() {
 
     el.feedContainer.appendChild(card);
   });
+
+  if (typeof renderCalendar === "function") {
+    renderCalendar();
+  }
 }
 
 function escapeHtml(text) {
@@ -1103,6 +1109,9 @@ function resetFileSelection() {
   el.previewVideo.classList.add("hidden");
   el.previewVideo.src = "";
   el.previewPlaceholder.classList.remove("hidden");
+  if (typeof resetDoodleStudio === "function") {
+    resetDoodleStudio();
+  }
   updateLiveOverlay();
 }
 
@@ -1188,9 +1197,32 @@ el.btnPostMoment.addEventListener("click", async () => {
     return;
   }
 
+  let fileToUpload = state.selectedFile;
+  if (typeof getMergedDoodleFile === "function") {
+    try {
+      const merged = await getMergedDoodleFile();
+      if (merged) fileToUpload = merged;
+    } catch (e) {
+      console.warn("Doodle merge error:", e);
+    }
+  }
+
   const formData = new FormData();
-  formData.append("file", state.selectedFile);
-  formData.append("caption", el.momentCaption.value.trim());
+  formData.append("file", fileToUpload);
+
+  let finalCaption = el.momentCaption.value.trim();
+  const toggleMusic = document.getElementById("toggle-music-sticker");
+  const songInput = document.getElementById("music-song-name");
+  const artistInput = document.getElementById("music-artist-name");
+  if (toggleMusic && toggleMusic.checked && songInput && songInput.value.trim()) {
+    const musicTag = `🎵 ${songInput.value.trim()}${artistInput && artistInput.value.trim() ? " - " + artistInput.value.trim() : ""}`;
+    if (!finalCaption) {
+      finalCaption = musicTag;
+    } else if (!finalCaption.includes("🎵")) {
+      finalCaption = `${finalCaption}\n${musicTag}`;
+    }
+  }
+  formData.append("caption", finalCaption);
 
   const isCustom = el.toggleCustomStyle.checked;
   if (isCustom) {
@@ -2793,11 +2825,929 @@ function initWidgetSimListeners() {
   }
 }
 
+// ================= 1. MEMORIES CALENDAR ================= //
+let calState = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth()
+};
+
+function initMemoriesCalendar() {
+  const btnPrev = document.getElementById("btn-prev-month");
+  const btnNext = document.getElementById("btn-next-month");
+  const btnToday = document.getElementById("btn-today-month");
+  const btnSlideshowMonth = document.getElementById("btn-slideshow-this-month");
+  const btnCloseDayMoments = document.getElementById("btn-close-day-moments");
+
+  if (btnPrev) {
+    btnPrev.addEventListener("click", () => {
+      calState.month--;
+      if (calState.month < 0) {
+        calState.month = 11;
+        calState.year--;
+      }
+      renderCalendar();
+    });
+  }
+
+  if (btnNext) {
+    btnNext.addEventListener("click", () => {
+      calState.month++;
+      if (calState.month > 11) {
+        calState.month = 0;
+        calState.year++;
+      }
+      renderCalendar();
+    });
+  }
+
+  if (btnToday) {
+    btnToday.addEventListener("click", () => {
+      const now = new Date();
+      calState.year = now.getFullYear();
+      calState.month = now.getMonth();
+      renderCalendar();
+    });
+  }
+
+  if (btnSlideshowMonth) {
+    btnSlideshowMonth.addEventListener("click", () => {
+      const monthMoments = state.moments.filter(m => {
+        const d = m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null);
+        if (!d) return false;
+        const dt = new Date(d);
+        return dt.getFullYear() === calState.year && dt.getMonth() === calState.month;
+      });
+
+      if (monthMoments.length === 0) {
+        showToast(`Tháng ${calState.month + 1}/${calState.year} chưa có khoảnh khắc nào!`, "info");
+        return;
+      }
+
+      openSlideshow(monthMoments);
+    });
+  }
+
+  if (btnCloseDayMoments) {
+    btnCloseDayMoments.addEventListener("click", () => {
+      const sec = document.getElementById("day-moments-section");
+      if (sec) sec.classList.add("hidden");
+    });
+  }
+}
+
+function renderCalendar() {
+  const monthNames = [
+    "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+    "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+  ];
+  const titleEl = document.getElementById("cal-month-year");
+  if (titleEl) {
+    titleEl.textContent = `${monthNames[calState.month]}, ${calState.year}`;
+  }
+
+  const gridEl = document.getElementById("calendar-grid");
+  if (!gridEl) return;
+  gridEl.innerHTML = "";
+
+  // Group moments by "YYYY-MM-DD"
+  const momentsByDate = {};
+  let totalThisMonth = 0;
+  state.moments.forEach(m => {
+    const d = m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null);
+    if (!d) return;
+    const dt = new Date(d);
+    if (dt.getFullYear() === calState.year && dt.getMonth() === calState.month) {
+      totalThisMonth++;
+    }
+    const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    if (!momentsByDate[key]) momentsByDate[key] = [];
+    momentsByDate[key].push(m);
+  });
+
+  const recapEl = document.getElementById("recap-total-moments");
+  if (recapEl) recapEl.textContent = totalThisMonth;
+
+  // Calendar calculations
+  const firstDayIndex = new Date(calState.year, calState.month, 1).getDay(); // 0 is Sunday
+  const daysInMonth = new Date(calState.year, calState.month + 1, 0).getDate();
+  const prevMonthDays = new Date(calState.year, calState.month, 0).getDate();
+
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === calState.year && today.getMonth() === calState.month;
+
+  // Previous month trailing padding days
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    const cell = document.createElement("div");
+    cell.className = "calendar-day-cell empty";
+    cell.innerHTML = `<span class="day-number" style="opacity:0.35;">${prevMonthDays - i}</span>`;
+    gridEl.appendChild(cell);
+  }
+
+  // Days in current month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const cell = document.createElement("div");
+    cell.className = "calendar-day-cell";
+    const dateKey = `${calState.year}-${String(calState.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayMoments = momentsByDate[dateKey] || [];
+
+    if (isCurrentMonth && day === today.getDate()) {
+      cell.classList.add("today");
+    }
+
+    if (dayMoments.length > 0) {
+      cell.classList.add("has-moments");
+      const latest = dayMoments[0];
+      const thumb = latest.thumbnail_url || latest.image_url;
+      if (thumb) {
+        cell.style.backgroundImage = `url("${thumb}")`;
+      }
+      cell.innerHTML = `
+        <span class="day-number">${day}</span>
+        <span class="day-moments-count">${dayMoments.length}</span>
+      `;
+
+      cell.addEventListener("click", () => {
+        document.querySelectorAll(".calendar-day-cell.active-day").forEach(c => c.classList.remove("active-day"));
+        cell.classList.add("active-day");
+        renderDayMoments(dateKey, dayMoments);
+      });
+    } else {
+      cell.innerHTML = `<span class="day-number">${day}</span>`;
+    }
+
+    gridEl.appendChild(cell);
+  }
+
+  // Fill remaining days
+  const totalCells = firstDayIndex + daysInMonth;
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= remaining; i++) {
+    const cell = document.createElement("div");
+    cell.className = "calendar-day-cell empty";
+    cell.innerHTML = `<span class="day-number" style="opacity:0.35;">${i}</span>`;
+    gridEl.appendChild(cell);
+  }
+}
+
+function renderDayMoments(dateKey, moments) {
+  const section = document.getElementById("day-moments-section");
+  const label = document.getElementById("selected-day-label");
+  const grid = document.getElementById("day-moments-grid");
+  if (!section || !label || !grid) return;
+
+  const [y, m, d] = dateKey.split("-");
+  label.textContent = `${d}/${m}/${y} (${moments.length} khoảnh khắc)`;
+  grid.innerHTML = "";
+
+  moments.forEach(m => {
+    const card = document.createElement("div");
+    card.className = "day-moment-card";
+    const mediaUrl = m.image_url || m.video_url;
+    const isVideo = !!m.video_url;
+    const author = m.author || m.user || {};
+    const authorName = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+    const authorAvatar = author.profile_picture_url || getDefaultAvatar(authorName);
+
+    const dt = m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : new Date());
+    const timeStr = new Date(dt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+    card.innerHTML = `
+      <div class="day-card-media-wrap" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;background:#000;">
+        ${isVideo
+          ? `<video src="${escapeHtml(mediaUrl)}" class="day-card-media" style="width:100%;height:100%;object-fit:cover;" playsinline muted loop></video><div class="video-indicator" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;padding:4px 8px;border-radius:10px;font-size:11px;"><i class="fa-solid fa-video"></i></div>`
+          : `<img src="${escapeHtml(mediaUrl)}" class="day-card-media" style="width:100%;height:100%;object-fit:cover;" alt="Moment" loading="lazy">`
+        }
+      </div>
+      <div class="day-card-info" style="margin-top:8px;">
+        <div class="day-card-author" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <img src="${escapeHtml(authorAvatar)}" class="avatar-sm" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" alt="${escapeHtml(authorName)}">
+          <div style="flex:1;overflow:hidden;">
+            <strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(authorName)}</strong>
+            <span class="text-muted" style="font-size:11px;">${timeStr}</span>
+          </div>
+        </div>
+        ${m.caption ? `<p class="day-card-caption" style="font-size:12px;margin:4px 0 8px 0;color:var(--text-secondary);">${escapeHtml(m.caption)}</p>` : ""}
+        <div class="day-card-actions" style="display:flex;gap:6px;margin-top:6px;">
+          <button type="button" class="btn btn-secondary btn-xs btn-open-media" style="flex:1;padding:4px 8px;font-size:11px;">
+            <i class="fa-solid fa-expand"></i> Xem
+          </button>
+          <button type="button" class="btn btn-primary btn-xs btn-card-polaroid" style="flex:1;padding:4px 8px;font-size:11px;">
+            <i class="fa-solid fa-camera-retro"></i> Polaroid
+          </button>
+        </div>
+      </div>
+    `;
+
+    card.querySelector(".btn-open-media").addEventListener("click", () => {
+      openLightbox(mediaUrl, isVideo);
+    });
+
+    card.querySelector(".btn-card-polaroid").addEventListener("click", () => {
+      openPolaroidModal(m);
+    });
+
+    grid.appendChild(card);
+  });
+
+  section.classList.remove("hidden");
+  section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ================= 2. PHOTO DOODLE STUDIO ================= //
+let doodleState = {
+  isDrawing: false,
+  color: "#ffcc00",
+  size: 4,
+  undoStack: [],
+  hasDrawn: false
+};
+
+function initDoodleStudio() {
+  const toggleDoodle = document.getElementById("toggle-doodle-mode");
+  const toolbar = document.getElementById("doodle-toolbar");
+  const canvas = document.getElementById("doodle-canvas");
+  const btnUndo = document.getElementById("btn-undo-doodle");
+  const btnClear = document.getElementById("btn-clear-doodle");
+
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  function syncCanvasSize() {
+    const parent = canvas.parentElement;
+    if (parent) {
+      const rect = parent.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+      }
+    }
+  }
+
+  if (toggleDoodle) {
+    toggleDoodle.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        if (toolbar) toolbar.classList.remove("hidden");
+        canvas.classList.remove("hidden");
+        syncCanvasSize();
+      } else {
+        if (toolbar) toolbar.classList.add("hidden");
+        canvas.classList.add("hidden");
+      }
+    });
+  }
+
+  // Color picker buttons
+  document.querySelectorAll(".doodle-color-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".doodle-color-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      doodleState.color = btn.dataset.color || "#ffcc00";
+    });
+  });
+
+  // Brush size buttons
+  document.querySelectorAll(".brush-size-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".brush-size-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      doodleState.size = parseInt(btn.dataset.size || "4", 10);
+    });
+  });
+
+  // Canvas Drawing Logic
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  }
+
+  function saveDoodleSnapshot() {
+    if (doodleState.undoStack.length > 20) {
+      doodleState.undoStack.shift();
+    }
+    doodleState.undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    doodleState.isDrawing = true;
+    doodleState.hasDrawn = true;
+    saveDoodleSnapshot();
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.strokeStyle = doodleState.color;
+    ctx.lineWidth = doodleState.size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!doodleState.isDrawing) return;
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  });
+
+  const stopDrawing = () => {
+    if (doodleState.isDrawing) {
+      doodleState.isDrawing = false;
+      ctx.closePath();
+    }
+  };
+  canvas.addEventListener("pointerup", stopDrawing);
+  canvas.addEventListener("pointercancel", stopDrawing);
+  canvas.addEventListener("pointerleave", stopDrawing);
+
+  if (btnUndo) {
+    btnUndo.addEventListener("click", () => {
+      if (doodleState.undoStack.length > 0) {
+        const lastSnap = doodleState.undoStack.pop();
+        ctx.putImageData(lastSnap, 0, 0);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        doodleState.hasDrawn = false;
+      }
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      doodleState.undoStack = [];
+      doodleState.hasDrawn = false;
+      showToast("Đã xóa tất cả nét vẽ!", "info");
+    });
+  }
+}
+
+function resetDoodleStudio() {
+  const toggleDoodle = document.getElementById("toggle-doodle-mode");
+  const toolbar = document.getElementById("doodle-toolbar");
+  const canvas = document.getElementById("doodle-canvas");
+  if (toggleDoodle) toggleDoodle.checked = false;
+  if (toolbar) toolbar.classList.add("hidden");
+  if (canvas) {
+    canvas.classList.add("hidden");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  doodleState.undoStack = [];
+  doodleState.hasDrawn = false;
+}
+
+async function getMergedDoodleFile() {
+  const toggleDoodle = document.getElementById("toggle-doodle-mode");
+  const canvas = document.getElementById("doodle-canvas");
+  if (!toggleDoodle || !toggleDoodle.checked || !doodleState.hasDrawn || !state.selectedFile) {
+    return null;
+  }
+  if (state.selectedFileType === "video") {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(state.selectedFile);
+    img.src = objectUrl;
+    img.onload = () => {
+      const offscreen = document.createElement("canvas");
+      offscreen.width = img.naturalWidth || 1080;
+      offscreen.height = img.naturalHeight || 1080;
+      const offCtx = offscreen.getContext("2d");
+
+      // Draw base image
+      offCtx.drawImage(img, 0, 0, offscreen.width, offscreen.height);
+
+      // Draw scaled doodle layer
+      offCtx.drawImage(canvas, 0, 0, offscreen.width, offscreen.height);
+
+      URL.revokeObjectURL(objectUrl);
+
+      offscreen.toBlob((blob) => {
+        if (!blob) return resolve(null);
+        const fileName = state.selectedFile.name.replace(/\.[^/.]+$/, "") + "_doodle.jpg";
+        const file = new File([blob], fileName, { type: "image/jpeg" });
+        resolve(file);
+      }, "image/jpeg", 0.95);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+  });
+}
+
+// ================= 3. ITUNES MUSIC SEARCH & AUDIO PREVIEW ================= //
+let currentPreviewAudio = null;
+let currentPreviewUrl = null;
+
+function initMusicSearch() {
+  const searchInput = document.getElementById("music-search-input");
+  const resultsBox = document.getElementById("music-search-results");
+  const previewWrap = document.getElementById("music-preview-wrap");
+  const previewTitle = document.getElementById("music-preview-title");
+  const btnToggleAudio = document.getElementById("btn-toggle-music-preview");
+  const songInput = document.getElementById("music-song-name");
+  const artistInput = document.getElementById("music-artist-name");
+
+  if (!searchInput || !resultsBox) return;
+
+  let debounceTimer = null;
+
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim();
+    clearTimeout(debounceTimer);
+    if (q.length < 2) {
+      resultsBox.classList.add("hidden");
+      resultsBox.innerHTML = "";
+      return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=6`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const songs = data.results || [];
+        if (songs.length === 0) {
+          resultsBox.innerHTML = `<div style="padding:10px;text-align:center;color:var(--text-muted);font-size:12px;">Không tìm thấy bài hát phù hợp.</div>`;
+          resultsBox.classList.remove("hidden");
+          return;
+        }
+
+        resultsBox.innerHTML = songs.map(s => `
+          <div class="music-search-item" data-song="${escapeHtml(s.trackName)}" data-artist="${escapeHtml(s.artistName)}" data-preview="${escapeHtml(s.previewUrl || '')}">
+            <img src="${escapeHtml(s.artworkUrl60 || '')}" class="music-search-art" alt="Art">
+            <div class="music-search-meta">
+              <span class="music-search-title">${escapeHtml(s.trackName)}</span>
+              <span class="music-search-sub">${escapeHtml(s.artistName)}</span>
+            </div>
+          </div>
+        `).join("");
+        resultsBox.classList.remove("hidden");
+
+        resultsBox.querySelectorAll(".music-search-item").forEach(item => {
+          item.addEventListener("click", () => {
+            const song = item.dataset.song;
+            const artist = item.dataset.artist;
+            const preview = item.dataset.preview;
+
+            if (songInput) songInput.value = song;
+            if (artistInput) artistInput.value = artist;
+            updateMusicPreview();
+
+            if (previewWrap && preview) {
+              previewWrap.classList.remove("hidden");
+              if (previewTitle) previewTitle.textContent = `${song} - ${artist}`;
+              currentPreviewUrl = preview;
+
+              if (currentPreviewAudio) {
+                currentPreviewAudio.pause();
+                currentPreviewAudio = null;
+              }
+              if (btnToggleAudio) btnToggleAudio.innerHTML = `<i class="fa-solid fa-play"></i> Nghe thử 30s`;
+            }
+
+            resultsBox.classList.add("hidden");
+            searchInput.value = `${song} - ${artist}`;
+          });
+        });
+      } catch (e) {
+        console.warn("iTunes Search Error:", e);
+      }
+    }, 300);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!searchInput.contains(e.target) && !resultsBox.contains(e.target)) {
+      resultsBox.classList.add("hidden");
+    }
+  });
+
+  if (btnToggleAudio) {
+    btnToggleAudio.addEventListener("click", () => {
+      if (!currentPreviewUrl) return;
+
+      if (currentPreviewAudio && !currentPreviewAudio.paused) {
+        currentPreviewAudio.pause();
+        btnToggleAudio.innerHTML = `<i class="fa-solid fa-play"></i> Nghe thử 30s`;
+      } else {
+        if (!currentPreviewAudio || currentPreviewAudio.src !== currentPreviewUrl) {
+          currentPreviewAudio = new Audio(currentPreviewUrl);
+          currentPreviewAudio.onended = () => {
+            btnToggleAudio.innerHTML = `<i class="fa-solid fa-play"></i> Nghe thử 30s`;
+          };
+        }
+        currentPreviewAudio.play().then(() => {
+          btnToggleAudio.innerHTML = `<i class="fa-solid fa-pause"></i> Tạm dừng`;
+        }).catch(() => {
+          showToast("Không thể phát đoạn nghe thử này.", "info");
+        });
+      }
+    });
+  }
+}
+
+// ================= 4. LOCKET FRIEND QR PASS MODAL ================= //
+function initQRPassModal() {
+  const btnOpen = document.getElementById("btn-open-my-qr");
+  const modal = document.getElementById("qr-modal");
+  const btnClose = document.getElementById("btn-close-qr-modal");
+  const btnDownload = document.getElementById("btn-download-qr-card");
+  const btnCopy = document.getElementById("btn-copy-invite-link");
+
+  if (!modal) return;
+
+  function renderQRPass() {
+    const user = state.currentUser || {};
+    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "Thành viên Locket";
+    const username = user.username || "locket";
+    const avatar = user.profile_picture_url || getDefaultAvatar(name);
+
+    const nameEl = document.getElementById("qr-pass-name");
+    const handleEl = document.getElementById("qr-pass-handle");
+    const avatarEl = document.getElementById("qr-pass-avatar");
+    if (nameEl) nameEl.textContent = name;
+    if (handleEl) handleEl.textContent = `@${username}`;
+    if (avatarEl) avatarEl.src = avatar;
+
+    const inviteUrl = `https://locket.cam/${username}`;
+    const canvas = document.getElementById("qr-canvas");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      const qrImg = new Image();
+      qrImg.crossOrigin = "anonymous";
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(inviteUrl)}`;
+      qrImg.onload = () => {
+        ctx.clearRect(0, 0, 220, 220);
+        ctx.drawImage(qrImg, 0, 0, 220, 220);
+
+        // Center emblem
+        const centerSize = 44;
+        const centerX = (220 - centerSize) / 2;
+        const centerY = (220 - centerSize) / 2;
+        ctx.fillStyle = "#1b1c20";
+        drawRoundRect(ctx, centerX, centerY, centerSize, centerSize, 12);
+        ctx.fill();
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffd700";
+        ctx.font = "bold 20px -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("📷", 110, 110);
+      };
+    }
+  }
+
+  if (btnOpen) {
+    btnOpen.addEventListener("click", () => {
+      renderQRPass();
+      modal.classList.remove("hidden");
+    });
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener("click", () => {
+      modal.classList.add("hidden");
+    });
+  }
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+  });
+
+  if (btnCopy) {
+    btnCopy.addEventListener("click", () => {
+      const username = state.currentUser?.username || "";
+      const inviteUrl = `https://locket.cam/${username}`;
+      navigator.clipboard.writeText(inviteUrl);
+      showToast("Đã sao chép link kết bạn Locket!", "success");
+    });
+  }
+
+  if (btnDownload) {
+    btnDownload.addEventListener("click", () => {
+      const user = state.currentUser || {};
+      const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "Thành viên Locket";
+      const username = user.username || "locket";
+      const avatar = user.profile_picture_url || getDefaultAvatar(name);
+
+      const offCanvas = document.createElement("canvas");
+      offCanvas.width = 600;
+      offCanvas.height = 850;
+      const ctx = offCanvas.getContext("2d");
+
+      // Background Gradient
+      const grad = ctx.createLinearGradient(0, 0, 600, 850);
+      grad.addColorStop(0, "#191b22");
+      grad.addColorStop(1, "#0d0e12");
+      ctx.fillStyle = grad;
+      drawRoundRect(ctx, 0, 0, 600, 850, 40);
+      ctx.fill();
+
+      // Golden outer border
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 4;
+      drawRoundRect(ctx, 16, 16, 568, 818, 32);
+      ctx.stroke();
+
+      // Top Header
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 22px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("✦ LOCKET BY TUNGGG ✦", 300, 70);
+
+      // VIP Friend Pass Badge
+      ctx.fillStyle = "rgba(255, 215, 0, 0.15)";
+      drawRoundRect(ctx, 210, 85, 180, 32, 16);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 13px -apple-system, sans-serif";
+      ctx.fillText("VIP FRIEND PASS", 300, 106);
+
+      // User Avatar
+      const userImg = new Image();
+      userImg.crossOrigin = "anonymous";
+      userImg.src = avatar;
+      userImg.onload = () => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(300, 195, 52, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(userImg, 248, 143, 104, 104);
+        ctx.restore();
+
+        // Avatar Gold Ring
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(300, 195, 54, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // User Name & Handle
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 26px -apple-system, sans-serif";
+        ctx.fillText(name, 300, 285);
+
+        ctx.fillStyle = "#8a8d9b";
+        ctx.font = "16px -apple-system, sans-serif";
+        ctx.fillText(`@${username}`, 300, 315);
+
+        // QR Code Box
+        ctx.fillStyle = "#ffffff";
+        drawRoundRect(ctx, 160, 360, 280, 280, 24);
+        ctx.fill();
+
+        const qrSrcCanvas = document.getElementById("qr-canvas");
+        if (qrSrcCanvas) {
+          ctx.drawImage(qrSrcCanvas, 180, 380, 240, 240);
+        }
+
+        // Footer hint
+        ctx.fillStyle = "#e0e0e0";
+        ctx.font = "15px -apple-system, sans-serif";
+        ctx.fillText("Mở Camera điện thoại quét mã để kết bạn", 300, 690);
+
+        ctx.fillStyle = "#ffd700";
+        ctx.font = "13px -apple-system, sans-serif";
+        ctx.fillText(`locket.cam/${username}`, 300, 725);
+
+        const a = document.createElement("a");
+        a.download = `locket-friend-pass-${username}.png`;
+        a.href = offCanvas.toDataURL("image/png");
+        a.click();
+        showToast("Đã tải Thẻ QR Kết Bạn VIP!", "success");
+      };
+
+      userImg.onerror = () => {
+        showToast("Đang tạo thẻ QR...", "info");
+      };
+    });
+  }
+}
+
+// ================= 5. DATA BACKUP & OFFLINE PHOTO BOOK ================= //
+function initMemoriesBackup() {
+  const btnExportHtml = document.getElementById("btn-export-album-html");
+  const btnExportJson = document.getElementById("btn-export-album-json");
+
+  if (btnExportJson) {
+    btnExportJson.addEventListener("click", () => {
+      if (!state.moments || state.moments.length === 0) {
+        showToast("Chưa có khoảnh khắc nào để sao lưu!", "info");
+        return;
+      }
+
+      const jsonStr = JSON.stringify(state.moments, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const a = document.createElement("a");
+      a.download = `locket-moments-backup-${new Date().toISOString().split("T")[0]}.json`;
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast("Đã tải tệp sao lưu JSON thành công!", "success");
+    });
+  }
+
+  if (btnExportHtml) {
+    btnExportHtml.addEventListener("click", () => {
+      if (!state.moments || state.moments.length === 0) {
+        showToast("Chưa có khoảnh khắc nào để xuất sách ảnh!", "info");
+        return;
+      }
+
+      const user = state.currentUser || {};
+      const userName = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "Người dùng";
+      const exportDate = new Date().toLocaleDateString("vi-VN");
+
+      const cardsHtml = state.moments.map(m => {
+        const mediaUrl = m.image_url || m.video_url || "";
+        const isVideo = !!m.video_url;
+        const author = m.author || m.user || {};
+        const authorName = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+        const authorAvatar = author.profile_picture_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+        const dt = m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : new Date());
+        const dateStr = new Date(dt).toLocaleString("vi-VN");
+
+        return `
+          <div class="moment-item">
+            <div class="media-wrap">
+              ${isVideo
+                ? `<video src="${escapeHtml(mediaUrl)}" controls playsinline></video>`
+                : `<img src="${escapeHtml(mediaUrl)}" alt="Moment" loading="lazy">`
+              }
+            </div>
+            <div class="info-wrap">
+              <div class="author-row">
+                <img src="${escapeHtml(authorAvatar)}" class="avatar" alt="${escapeHtml(authorName)}">
+                <div>
+                  <div class="author-name">${escapeHtml(authorName)}</div>
+                  <div class="moment-time">${dateStr}</div>
+                </div>
+              </div>
+              ${m.caption ? `<div class="caption">${escapeHtml(m.caption)}</div>` : ""}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      const htmlContent = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Sách Ảnh Kỷ Niệm Locket - ${escapeHtml(userName)}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0f12;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 30px 20px;
+    }
+    .header {
+      max-width: 1200px;
+      margin: 0 auto 30px auto;
+      text-align: center;
+      padding: 30px;
+      background: linear-gradient(145deg, #16181d, #1f232b);
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .header h1 {
+      font-size: 28px;
+      color: #ffd700;
+      margin-bottom: 8px;
+    }
+    .header p {
+      color: #8b949e;
+      font-size: 14px;
+    }
+    .gallery {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .moment-item {
+      background: #16181d;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+    .moment-item:hover {
+      transform: translateY(-4px);
+      border-color: #ffd700;
+    }
+    .media-wrap {
+      width: 100%;
+      aspect-ratio: 1/1;
+      background: #000;
+    }
+    .media-wrap img, .media-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .info-wrap {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .author-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #ffd700;
+    }
+    .author-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+    }
+    .moment-time {
+      font-size: 11px;
+      color: #8b949e;
+    }
+    .caption {
+      font-size: 13.5px;
+      line-height: 1.4;
+      background: rgba(255,255,255,0.04);
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: #ffd700;
+    }
+    .footer {
+      max-width: 1200px;
+      margin: 40px auto 10px auto;
+      text-align: center;
+      font-size: 12px;
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>✦ Sách Ảnh Kỷ Niệm Locket ✦</h1>
+    <p>Chủ tài khoản: <strong>${escapeHtml(userName)}</strong> • Tổng số: <strong>${state.moments.length} khoảnh khắc</strong></p>
+    <p style="margin-top:4px;">Xuất bản ngày: ${exportDate} • Locket by Tunggg Edition</p>
+  </div>
+  <div class="gallery">
+    ${cardsHtml}
+  </div>
+  <div class="footer">
+    <p>© ${new Date().getFullYear()} Locket by Tunggg • Dữ liệu lưu trữ cá nhân ngoại tuyến</p>
+  </div>
+</body>
+</html>`;
+
+      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+      const a = document.createElement("a");
+      a.download = `Locket-PhotoBook-${new Date().toISOString().split("T")[0]}.html`;
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast("Đã tải Sách Ảnh Kỷ Niệm HTML Offline!", "success");
+    });
+  }
+}
+
 // Attach all mega feature listeners
 initFeedSearchAndFilters();
 initPolaroidListeners();
 initSlideshowListeners();
 initWidgetSimListeners();
+initMemoriesCalendar();
+initDoodleStudio();
+initMusicSearch();
+initQRPassModal();
+initMemoriesBackup();
 
 // Hook favorites and streak on load
 const origRenderCurrentUser = renderCurrentUser;
