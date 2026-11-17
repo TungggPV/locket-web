@@ -68,7 +68,10 @@
         </div>
         <div class="brand-text">
           <span class="brand-name">Locket by Tunggg</span>
-          <span class="brand-tag">Web Edition</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="brand-tag">Web Edition</span>
+            <span class="vip-badge-pill"><i class="fa-solid fa-crown"></i> VIP</span>
+          </div>
         </div>
       </div>
 
@@ -127,6 +130,7 @@
         <div class="mobile-brand">
           <i class="fa-solid fa-camera text-yellow"></i>
           <span>Locket by Tunggg</span>
+          <span class="vip-badge-pill" style="font-size:9px;padding:2px 6px;"><i class="fa-solid fa-crown"></i> VIP</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <button id="btn-mobile-theme" class="btn-icon" title="Đổi chủ đề giao diện">
@@ -312,6 +316,8 @@
                 <label><i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Bộ lọc màu (Photo Filters)</label>
                 <div class="filters-pill-group" id="filters-pill-group">
                   <button type="button" class="filter-pill active" data-filter="normal">Gốc</button>
+                  <button type="button" class="filter-pill vip-filter-pill" data-filter="gold-luxury"><i class="fa-solid fa-crown text-yellow"></i> Gold 24K 👑</button>
+                  <button type="button" class="filter-pill vip-filter-pill" data-filter="emerald"><i class="fa-solid fa-gem text-success"></i> Emerald 💎</button>
                   <button type="button" class="filter-pill" data-filter="vintage">Vintage 🎞️</button>
                   <button type="button" class="filter-pill" data-filter="cyberpunk">Cyberpunk 🔮</button>
                   <button type="button" class="filter-pill" data-filter="bw">Đen Trắng 🖤</button>
@@ -324,6 +330,9 @@
               <div class="form-group">
                 <label><i class="fa-solid fa-icons text-yellow"></i> Sticker & Trạng thái nhanh</label>
                 <div class="quick-stickers-row">
+                  <button type="button" class="sticker-chip vip-chip" data-text="👑 Locket VIP"><i class="fa-solid fa-crown text-yellow"></i> 👑 Locket VIP</button>
+                  <button type="button" class="sticker-chip vip-chip" data-text="💎 Supreme Gold"><i class="fa-solid fa-gem text-cyan"></i> 💎 Supreme</button>
+                  <button type="button" class="sticker-chip vip-chip" data-text="✨ Luxury Vibes"><i class="fa-solid fa-sparkles text-yellow"></i> ✨ Luxury</button>
                   <button type="button" class="sticker-chip" data-text="Đi cafe ☕">☕ Cafe</button>
                   <button type="button" class="sticker-chip" data-text="Chill cuối tuần 🎧">🎧 Chill</button>
                   <button type="button" class="sticker-chip" data-text="Đang ăn uống 🍜">🍜 Ăn uống</button>
@@ -643,8 +652,96 @@
               <h2 id="profile-full-name">Họ Tên</h2>
               <p id="profile-handle" class="profile-handle">@username</p>
               <div class="profile-badges">
+                <span class="badge badge-gold"><i class="fa-solid fa-crown text-yellow"></i> LOCKET GOLD VIP</span>
                 <span class="badge badge-gold"><i class="fa-solid fa-circle-check"></i> Đã xác thực</span>
                 <span class="badge badge-gray" id="profile-uid-badge">UID: ...</span>
+              </div>
+
+              <!-- LOCKET GOLD VIP MEMBERSHIP SUITE -->
+              <div class="vip-gold-card-container mt-4">
+                <div class="vip-gold-card" id="vip-member-card">
+                  <div class="vip-card-shine"></div>
+                  <div class="vip-card-header">
+                    <div class="vip-brand-badge">
+                      <i class="fa-solid fa-crown text-yellow"></i>
+                      <span>LOCKET GOLD VIP</span>
+                    </div>
+                    <span class="vip-status-pill"><i class="fa-solid fa-shield-halved"></i> LIFETIME ACTIVE</span>
+                  </div>
+                  <div class="vip-card-chip">
+                    <div class="chip-metal"></div>
+                    <i class="fa-solid fa-wifi chip-contactless"></i>
+                  </div>
+                  <div class="vip-card-number">
+                    <span>8888</span> <span>7777</span> <span>9999</span> <span id="vip-card-last4">GOLD</span>
+                  </div>
+                  <div class="vip-card-details">
+                    <div>
+                      <div class="vip-card-label">HỘI VIÊN SỞ HỮU</div>
+                      <div class="vip-card-val" id="vip-card-holder">TÊN NGƯỜI DÙNG</div>
+                    </div>
+                    <div>
+                      <div class="vip-card-label">HẠN DÙNG</div>
+                      <div class="vip-card-val">VĨNH VIỄN ✦</div>
+                    </div>
+                    <div>
+                      <div class="vip-card-label">CẤP ĐỘ</div>
+                      <div class="vip-card-val text-yellow">SUPREME VIP</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="vip-privileges-box">
+                  <h4><i class="fa-solid fa-gem text-yellow"></i> Đặc Quyền Locket Gold VIP Của Bạn</h4>
+                  <div class="vip-privilege-grid">
+                    <div class="vip-privilege-item">
+                      <i class="fa-solid fa-crown text-yellow"></i>
+                      <div>
+                        <strong>Huy hiệu Vương Miện VIP 👑</strong>
+                        <p>Hiển thị vương miện hoàng kim & vòng hào quang vàng sáng quanh avatar</p>
+                      </div>
+                    </div>
+                    <div class="vip-privilege-item">
+                      <i class="fa-solid fa-ghost text-purple"></i>
+                      <div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                          <strong>Chế độ Ẩn Danh (Ghost Mode)</strong>
+                          <label class="switch-label" style="margin:0;">
+                            <input type="checkbox" id="toggle-ghost-mode" checked>
+                            <span class="slider round"></span>
+                          </label>
+                        </div>
+                        <p>Xem khoảnh khắc & story bạn bè ẩn danh 100% không lưu vết đã xem</p>
+                      </div>
+                    </div>
+                    <div class="vip-privilege-item">
+                      <i class="fa-solid fa-cloud-arrow-down text-cyan"></i>
+                      <div>
+                        <strong>Tải ảnh & video gốc Ultra HD</strong>
+                        <p>Mở nút tải trực tiếp ảnh/video độ phân giải gốc 4K không nén không mờ</p>
+                      </div>
+                    </div>
+                    <div class="vip-privilege-item">
+                      <i class="fa-solid fa-palette text-pink"></i>
+                      <div>
+                        <strong>Mở khóa Theme VIP Độc Quyền</strong>
+                        <p>Theme Hoàng Kim Locket Gold Luxury dát vàng lộng lẫy</p>
+                      </div>
+                    </div>
+                    <div class="vip-privilege-item">
+                      <i class="fa-solid fa-wand-magic-sparkles text-yellow"></i>
+                      <div>
+                        <strong>Khung ảnh & Nhãn dán VIP Studio</strong>
+                        <p>Bộ lọc màu Gold 24K, Emerald và icon Vương Miện hoàng gia</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="vip-card-actions">
+                    <button type="button" id="btn-download-vip-card" class="btn btn-gold btn-block">
+                      <i class="fa-solid fa-download"></i> Tải Thẻ Hội Viên VIP (PNG)
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <!-- Activity Stats Overview -->

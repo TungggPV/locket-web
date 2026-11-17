@@ -391,17 +391,30 @@ function renderCurrentUser() {
 
   el.sidebarAvatar.src = avatarUrl;
   el.mobileAvatar.src = avatarUrl;
-  el.sidebarName.textContent = fullName;
+  el.sidebarName.innerHTML = `${escapeHtml(fullName)} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
   el.sidebarUsername.textContent = `@${state.user.username || "me"}`;
+
+  // VIP Avatar Glow
+  el.sidebarAvatar.classList.add("vip-avatar-glow");
+  el.mobileAvatar.classList.add("vip-avatar-glow");
 
   // Profile tab fields
   el.profileCardAvatar.src = avatarUrl;
-  el.profileFullName.textContent = fullName;
+  el.profileCardAvatar.classList.add("vip-avatar-glow");
+  el.profileFullName.innerHTML = `${escapeHtml(fullName)} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
   el.profileHandle.textContent = `@${state.user.username || "me"}`;
   el.profileUidBadge.textContent = `UID: ${state.user.uid || "..."}`;
   el.profileFirstName.value = state.user.first_name || "";
   el.profileLastName.value = state.user.last_name || "";
   el.profileEmail.textContent = state.user.email || "Đã liên kết";
+
+  // VIP Card details
+  const vipHolder = document.getElementById("vip-card-holder");
+  const vipLast4 = document.getElementById("vip-card-last4");
+  if (vipHolder) vipHolder.textContent = fullName.toUpperCase();
+  if (vipLast4 && state.user.uid) {
+    vipLast4.textContent = state.user.uid.slice(-4).toUpperCase();
+  }
 }
 
 // ================= Friends Management ================= //
@@ -771,9 +784,9 @@ function renderFeed() {
     card.innerHTML = `
       <div class="moment-header">
         <div class="moment-author">
-          <img src="${authorAvatar}" alt="${authorName}" class="author-avatar">
+          <img src="${authorAvatar}" alt="${authorName}" class="author-avatar ${isMe ? 'vip-avatar-glow' : ''}">
           <div class="author-info">
-            <span class="author-name">${escapeHtml(authorName)}</span>
+            <span class="author-name">${escapeHtml(authorName)}${isMe ? ' <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>' : ''}</span>
             <span class="moment-time">${timeAgo}</span>
           </div>
         </div>
@@ -811,7 +824,10 @@ function renderFeed() {
           <span class="views-pill btn-view-reactions" data-uid="${m.moment_uid}">
             <i class="fa-solid fa-eye"></i> Xem cảm xúc & lượt xem
           </span>
-          <div style="display:flex;gap:6px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="views-pill btn-vip-download-hd" data-url="${m.image_url || m.video_url}" data-uid="${m.moment_uid}" title="Tải ảnh gốc Ultra HD 4K (Quyền lợi Locket VIP)">
+              <i class="fa-solid fa-crown text-yellow"></i> Tải HD 👑
+            </span>
             <span class="views-pill btn-polaroid-moment" data-uid="${m.moment_uid}" title="Xuất thiệp Polaroid nghệ thuật">
               <i class="fa-solid fa-image"></i> Polaroid
             </span>
@@ -848,6 +864,14 @@ function renderFeed() {
     if (polBtn) {
       polBtn.addEventListener("click", () => {
         openPolaroidModal(m.moment_uid);
+      });
+    }
+
+    // VIP HD Download button
+    const vipDownloadBtn = card.querySelector(".btn-vip-download-hd");
+    if (vipDownloadBtn) {
+      vipDownloadBtn.addEventListener("click", () => {
+        downloadHdMedia(m.image_url || m.video_url, `locket-gold-hd-${m.moment_uid}`);
       });
     }
 
@@ -1913,8 +1937,9 @@ window.addEventListener("keydown", (e) => {
 });
 
 
-// ================= THEME SWITCHER (Gold, Purple, Blue, Pink, AMOLED) ================= //
+// ================= THEME SWITCHER (Gold Luxury, Classic Gold, Purple, Blue, Pink, AMOLED) ================= //
 const THEMES = [
+  { id: "gold-luxury", name: "👑 Locket Gold Luxury (VIP)" },
   { id: "gold", name: "Locket Classic Gold 💛" },
   { id: "purple", name: "Cyberpunk Purple 💜" },
   { id: "blue", name: "Deep Ocean Blue 💙" },
@@ -1933,7 +1958,7 @@ function applyTheme(themeId) {
 }
 
 function initTheme() {
-  const savedTheme = localStorage.getItem("locket_theme") || "gold";
+  const savedTheme = localStorage.getItem("locket_theme") || "gold-luxury";
   const idx = THEMES.findIndex(t => t.id === savedTheme);
   currentThemeIndex = idx >= 0 ? idx : 0;
   applyTheme(savedTheme);
@@ -1965,7 +1990,7 @@ document.querySelectorAll(".filter-pill").forEach(btn => {
 
     const img = document.getElementById("preview-image");
     const vid = document.getElementById("preview-video");
-    ["filter-vintage", "filter-cyberpunk", "filter-bw", "filter-sunset", "filter-cold"].forEach(c => {
+    ["filter-vintage", "filter-cyberpunk", "filter-bw", "filter-sunset", "filter-cold", "filter-gold-luxury", "filter-emerald"].forEach(c => {
       if (img) img.classList.remove(c);
       if (vid) vid.classList.remove(c);
     });
@@ -3738,6 +3763,203 @@ function initMemoriesBackup() {
   }
 }
 
+// ================= 6. LOCKET GOLD VIP SUITE ================= //
+async function downloadHdMedia(url, filename) {
+  if (!url) return;
+  showToast("💎 Đang tải file gốc Ultra HD không nén từ Locket Cloud...", "info");
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const blob = await res.blob();
+    const ext = blob.type.includes("video") ? "mp4" : "jpg";
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `${filename || 'locket-ultra-hd'}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    showToast("🎉 Đã tải khoảnh khắc Ultra HD gốc thành công!", "success");
+  } catch (e) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.download = filename || "locket-ultra-hd";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("Đang mở tệp media gốc chất lượng cao...", "info");
+  }
+}
+
+function initLocketVipSuite() {
+  const toggleGhost = document.getElementById("toggle-ghost-mode");
+  const btnDownloadVip = document.getElementById("btn-download-vip-card");
+
+  // Ghost Mode Init
+  if (toggleGhost) {
+    const isGhost = localStorage.getItem("locket_ghost_mode") !== "false";
+    toggleGhost.checked = isGhost;
+    toggleGhost.addEventListener("change", (e) => {
+      localStorage.setItem("locket_ghost_mode", e.target.checked);
+      if (e.target.checked) {
+        showToast("👻 Chế độ Ẩn Danh VIP: Đang BẬT! Bạn có thể xem ảnh & story bạn bè hoàn toàn vô hình.", "success");
+      } else {
+        showToast("Đã tắt Chế độ Ẩn Danh.", "info");
+      }
+    });
+  }
+
+  // 3D Locket Gold VIP Member Card Tilt Effect
+  const card = document.getElementById("vip-member-card");
+  if (card) {
+    card.addEventListener("mousemove", (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left - rect.width / 2;
+      const y = e.clientY - rect.top - rect.height / 2;
+      const rotX = -(y / (rect.height / 2)) * 10;
+      const rotY = (x / (rect.width / 2)) * 10;
+      card.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
+    });
+    card.addEventListener("mouseleave", () => {
+      card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)";
+    });
+  }
+
+  // Generate & Download 3D VIP Card PNG
+  if (btnDownloadVip) {
+    btnDownloadVip.addEventListener("click", () => {
+      const user = state.user || {};
+      const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "HOANG GIA VIP";
+      const last4 = user.uid ? user.uid.slice(-4).toUpperCase() : "GOLD";
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 900;
+      canvas.height = 540;
+      const ctx = canvas.getContext("2d");
+
+      // Deep Luxury Obsidian Gold Gradient
+      const grad = ctx.createLinearGradient(0, 0, 900, 540);
+      grad.addColorStop(0, "#191507");
+      grad.addColorStop(0.4, "#2e250b");
+      grad.addColorStop(0.7, "#1c1808");
+      grad.addColorStop(1, "#0f0d04");
+      ctx.fillStyle = grad;
+      drawRoundRect(ctx, 0, 0, 900, 540, 36);
+      ctx.fill();
+
+      // Metallic 24K Gold Border
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 5;
+      drawRoundRect(ctx, 15, 15, 870, 510, 30);
+      ctx.stroke();
+
+      // Inner subtle border
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.25)";
+      ctx.lineWidth = 1.5;
+      drawRoundRect(ctx, 25, 25, 850, 490, 24);
+      ctx.stroke();
+
+      // Top Header Brand
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 28px -apple-system, sans-serif";
+      ctx.fillText("👑 LOCKET GOLD VIP", 60, 85);
+
+      // Status Pill
+      ctx.fillStyle = "rgba(255, 215, 0, 0.18)";
+      drawRoundRect(ctx, 610, 55, 230, 38, 19);
+      ctx.fill();
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 13px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("✦ LIFETIME ACTIVE", 725, 79);
+      ctx.textAlign = "left";
+
+      // Golden EMV Chip
+      const chipGrad = ctx.createLinearGradient(60, 140, 140, 205);
+      chipGrad.addColorStop(0, "#d4af37");
+      chipGrad.addColorStop(0.5, "#fae188");
+      chipGrad.addColorStop(1, "#997305");
+      ctx.fillStyle = chipGrad;
+      drawRoundRect(ctx, 60, 140, 80, 65, 14);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Chip circuit accents
+      ctx.strokeStyle = "rgba(100, 70, 0, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(75, 152, 50, 40);
+
+      // Contactless Wi-Fi wave icon
+      ctx.fillStyle = "rgba(255, 215, 0, 0.75)";
+      ctx.font = "bold 26px sans-serif";
+      ctx.fillText("🛜", 160, 185);
+
+      // Embossed Card Number
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 34px 'Courier New', Courier, monospace";
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowOffsetY = 3;
+      ctx.shadowBlur = 6;
+      ctx.fillText(`8888   7777   9999   ${last4}`, 60, 280);
+      ctx.shadowColor = "transparent";
+
+      // Divider line
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.25)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(60, 340);
+      ctx.lineTo(840, 340);
+      ctx.stroke();
+
+      // Details Columns
+      // Cardholder
+      ctx.fillStyle = "#8e8d96";
+      ctx.font = "bold 13px -apple-system, sans-serif";
+      ctx.fillText("HỘI VIÊN SỞ HỮU", 60, 385);
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 24px -apple-system, sans-serif";
+      ctx.fillText(name.toUpperCase(), 60, 425);
+
+      // Expiry
+      ctx.fillStyle = "#8e8d96";
+      ctx.font = "bold 13px -apple-system, sans-serif";
+      ctx.fillText("HẠN DÙNG", 420, 385);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 22px -apple-system, sans-serif";
+      ctx.fillText("VĨNH VIỄN ✦", 420, 425);
+
+      // Rank
+      ctx.fillStyle = "#8e8d96";
+      ctx.font = "bold 13px -apple-system, sans-serif";
+      ctx.fillText("CẤP BẬC", 650, 385);
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "bold 22px -apple-system, sans-serif";
+      ctx.fillText("SUPREME VIP 👑", 650, 425);
+
+      // Watermark
+      ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
+      ctx.font = "12px -apple-system, sans-serif";
+      ctx.fillText("✦ LOCKET BY TUNGGG · OFFICIAL VIP MEMBER CARD", 60, 495);
+
+      const a = document.createElement("a");
+      a.download = `locket-gold-vip-member-card-${last4}.png`;
+      a.href = canvas.toDataURL("image/png");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast("🎉 Đã tải Thẻ Hội Viên Locket Gold VIP thành công!", "success");
+    });
+  }
+}
+
 // Attach all mega feature listeners
 initFeedSearchAndFilters();
 initPolaroidListeners();
@@ -3748,6 +3970,7 @@ initDoodleStudio();
 initMusicSearch();
 initQRPassModal();
 initMemoriesBackup();
+initLocketVipSuite();
 
 // Hook favorites and streak on load
 const origRenderCurrentUser = renderCurrentUser;
