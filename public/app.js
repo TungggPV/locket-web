@@ -14,6 +14,26 @@ const state = {
   selectedFileType: null
 };
 
+// ================= Session Token Management (Zero Server Disk Writes) ================= //
+function getSessionToken() {
+  return sessionStorage.getItem("locket_session") || localStorage.getItem("locket_session") || "";
+}
+function setSessionToken(token) {
+  sessionStorage.setItem("locket_session", token);
+}
+function clearSessionToken() {
+  sessionStorage.removeItem("locket_session");
+  localStorage.removeItem("locket_session");
+}
+async function apiFetch(url, options = {}) {
+  const token = getSessionToken();
+  const headers = options.headers || {};
+  if (token) {
+    headers["x-locket-session"] = token;
+  }
+  return fetch(url, { ...options, headers });
+}
+
 // UI Elements
 const el = {
   authScreen: document.getElementById("auth-screen"),
@@ -209,8 +229,14 @@ el.navItems.forEach(item => {
 
 // ================= Auth & Initialization ================= //
 async function checkAuthStatus() {
+  const token = getSessionToken();
+  if (!token) {
+    el.authScreen.classList.remove("hidden");
+    return;
+  }
+
   try {
-    const res = await fetch("/api/auth/status");
+    const res = await apiFetch("/api/auth/status");
     const data = await res.json();
 
     if (data.authenticated) {
@@ -220,10 +246,12 @@ async function checkAuthStatus() {
       await Promise.all([loadFriends(), loadPresets()]);
       loadFeed();
     } else {
+      clearSessionToken();
       el.authScreen.classList.remove("hidden");
     }
   } catch (err) {
     console.error("Auth status error:", err);
+    clearSessionToken();
     el.authScreen.classList.remove("hidden");
   }
 }
@@ -240,7 +268,7 @@ el.loginForm.addEventListener("submit", async e => {
   el.loginError.classList.add("hidden");
 
   try {
-    const res = await fetch("/api/auth/login", {
+    const res = await apiFetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password })
@@ -249,6 +277,7 @@ el.loginForm.addEventListener("submit", async e => {
 
     if (res.ok && data.success) {
       showToast("Đăng nhập thành công!", "success");
+      setSessionToken(data.sessionData);
       el.authScreen.classList.add("hidden");
       state.user = data.user;
       renderCurrentUser();
@@ -278,15 +307,14 @@ el.togglePassword.addEventListener("click", () => {
 async function handleLogout() {
   if (!confirm("Bạn có chắc chắn muốn đăng xuất không?")) return;
   try {
-    await fetch("/api/auth/logout", { method: "POST" });
-    state.user = null;
-    state.friends = [];
-    state.moments = [];
-    el.authScreen.classList.remove("hidden");
-    showToast("Đã đăng xuất.", "info");
-  } catch (e) {
-    showToast("Lỗi đăng xuất", "error");
-  }
+    await apiFetch("/api/auth/logout", { method: "POST" });
+  } catch (e) {}
+  clearSessionToken();
+  state.user = null;
+  state.friends = [];
+  state.moments = [];
+  el.authScreen.classList.remove("hidden");
+  showToast("Đã xóa phiên và đăng xuất thành công.", "info");
 }
 el.btnLogout.addEventListener("click", handleLogout);
 el.btnProfileLogout.addEventListener("click", handleLogout);
@@ -314,7 +342,7 @@ function renderCurrentUser() {
 // ================= Friends Management ================= //
 async function loadFriends() {
   try {
-    const res = await fetch("/api/friends");
+    const res = await apiFetch("/api/friends");
     const friends = await res.json();
     state.friends = Array.isArray(friends) ? friends : [];
 
@@ -418,7 +446,7 @@ el.btnSendFriendRequest.addEventListener("click", async () => {
 
   el.btnSendFriendRequest.disabled = true;
   try {
-    const res = await fetch("/api/friends/request", {
+    const res = await apiFetch("/api/friends/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username })
@@ -440,7 +468,7 @@ el.btnSendFriendRequest.addEventListener("click", async () => {
 // Load friend requests
 async function loadFriendRequests() {
   try {
-    const res = await fetch("/api/friends/requests");
+    const res = await apiFetch("/api/friends/requests");
     const data = await res.json();
     const incoming = data.incoming || [];
     if (incoming.length > 0) {
@@ -470,7 +498,7 @@ async function loadFriendRequests() {
 
 async function acceptFriendRequest(userUid) {
   try {
-    const res = await fetch("/api/friends/accept", {
+    const res = await apiFetch("/api/friends/accept", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userUid })
@@ -487,7 +515,7 @@ async function acceptFriendRequest(userUid) {
 // ================= Presets Loading ================= //
 async function loadPresets() {
   try {
-    const res = await fetch("/api/presets");
+    const res = await apiFetch("/api/presets");
     state.presets = await res.json();
 
     el.momentPresetSelect.innerHTML = `<option value="standard">Tiêu chuẩn (Standard)</option>`;
@@ -536,7 +564,7 @@ async function loadFeed(refresh = false) {
   if (filterFriend) url += `&filteredByUserId=${encodeURIComponent(filterFriend)}`;
 
   try {
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     const data = await res.json();
 
     state.moments = data.moments || [];
@@ -731,7 +759,7 @@ async function sendReaction(momentUid, emoji, btnElement) {
     btnElement.style.transform = "scale(1.5)";
     setTimeout(() => { btnElement.style.transform = ""; }, 250);
 
-    const res = await fetch("/api/moments/react", {
+    const res = await apiFetch("/api/moments/react", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ momentUid, reaction: emoji })
@@ -748,7 +776,7 @@ async function sendReaction(momentUid, emoji, btnElement) {
 async function deleteMoment(momentUid) {
   if (!confirm("Bạn có chắc chắn muốn xóa khoảnh khắc này khỏi Locket?")) return;
   try {
-    const res = await fetch(`/api/moments/${momentUid}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/moments/${momentUid}`, { method: "DELETE" });
     if (res.ok) {
       showToast("Đã xóa khoảnh khắc.", "success");
       const card = document.getElementById(`moment-${momentUid}`);
@@ -773,7 +801,7 @@ async function openViewsModal(momentUid) {
   `;
 
   try {
-    const res = await fetch(`/api/moments/${momentUid}/views`);
+    const res = await apiFetch(`/api/moments/${momentUid}/views`);
     const data = await res.json();
 
     const viewsCount = data.count || data.num_views || 0;
@@ -1015,6 +1043,8 @@ el.btnPostMoment.addEventListener("click", async () => {
 
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/api/moments/post");
+  const sessToken = getSessionToken();
+  if (sessToken) xhr.setRequestHeader("x-locket-session", sessToken);
 
   xhr.upload.onprogress = e => {
     if (e.lengthComputable) {
@@ -1060,7 +1090,7 @@ el.btnPostMoment.addEventListener("click", async () => {
 // ================= Chat Management ================= //
 async function loadConversations() {
   try {
-    const res = await fetch("/api/chat/conversations");
+    const res = await apiFetch("/api/chat/conversations");
     const convs = await res.json();
 
     if (!Array.isArray(convs) || convs.length === 0) {
@@ -1133,7 +1163,7 @@ async function openChatWithFriend(friend) {
   `;
 
   try {
-    const res = await fetch(`/api/chat/messages?otherUserId=${encodeURIComponent(friend.uid)}`);
+    const res = await apiFetch(`/api/chat/messages?otherUserId=${encodeURIComponent(friend.uid)}`);
     const messages = await res.json();
     renderChatMessages(messages);
   } catch (err) {
@@ -1190,7 +1220,7 @@ async function sendChatMessage() {
   el.chatMessagesWrap.scrollTop = el.chatMessagesWrap.scrollHeight;
 
   try {
-    const res = await fetch("/api/chat/send", {
+    const res = await apiFetch("/api/chat/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1221,7 +1251,7 @@ el.btnSaveName.addEventListener("click", async () => {
 
   el.btnSaveName.disabled = true;
   try {
-    const res = await fetch("/api/user/profile", {
+    const res = await apiFetch("/api/user/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ firstName, lastName })
@@ -1251,7 +1281,7 @@ el.avatarFileInput.addEventListener("change", async e => {
 
   showToast("Đang cập nhật ảnh đại diện...", "info");
   try {
-    const res = await fetch("/api/user/avatar", {
+    const res = await apiFetch("/api/user/avatar", {
       method: "POST",
       body: formData
     });

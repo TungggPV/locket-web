@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
 const multer = require("multer");
-const { LocketClient, NoteType } = require("./");
+const { LocketClient, NoteType, DeviceProfile } = require("./");
 
 // Setup ffmpeg path for video processing
 try {
@@ -20,24 +20,13 @@ try {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SESSION_FILE = path.join(__dirname, "locket.js_session.json");
 const UPLOAD_DIR = path.join(__dirname, "uploads");
-
-// Auto-restore session from environment variable if present
-if (process.env.LOCKET_SESSION_DATA && !fs.existsSync(SESSION_FILE)) {
-  try {
-    fs.writeFileSync(SESSION_FILE, process.env.LOCKET_SESSION_DATA, "utf8");
-    console.log("[Auth]: Restored session from LOCKET_SESSION_DATA env var.");
-  } catch (e) {
-    console.error("Failed to write session from env:", e.message);
-  }
-}
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Multer storage
+// Multer storage for temporary uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
@@ -64,56 +53,39 @@ try {
   captionPresets = {};
 }
 
-// Client Management
-let client = null;
-let cachedFriends = new Map();
-let myProfile = null;
-
-function initClient() {
+// Helper: Restore client per request from header - NEVER save to disk
+function getClient(req) {
+  const header = req.headers["x-locket-session"];
+  if (!header) return null;
   try {
-    client = new LocketClient({ sessionPath: SESSION_FILE });
+    const raw = Buffer.from(header, "base64").toString("utf8");
+    const data = JSON.parse(raw);
+    const client = new LocketClient({ sessionPath: null });
+    client.session.uid = data.uid;
+    client.session.email = data.email;
+    client.session.idToken = data.idToken;
+    client.session.refreshToken = data.refreshToken;
+    client.session.expiresAt = data.expiresAt || 0;
+    if (data.device) {
+      client.session.device = DeviceProfile.fromDict(data.device);
+      client.device = client.session.device;
+    }
     return client;
-  } catch (err) {
-    console.error("Failed to init LocketClient:", err);
-    client = null;
+  } catch (e) {
     return null;
   }
 }
 
-initClient();
-
-async function refreshCache() {
-  if (!client || !client.isAuthenticated()) return;
-  try {
-    myProfile = await client.user.getProfile();
-  } catch (e) {
-    console.warn("Could not fetch my profile:", e.message);
-  }
-
-  try {
-    const friends = await client.friends.getAllFriends();
-    if (Array.isArray(friends)) {
-      cachedFriends.clear();
-      for (const f of friends) {
-        cachedFriends.set(f.uid, f);
-      }
-    }
-  } catch (e) {
-    console.warn("Could not fetch friends:", e.message);
-  }
-}
-
-// Initial cache warm up
-refreshCache().catch(() => {});
-
-// Middleware to ensure client is authenticated
+// Middleware to ensure request has valid session
 function requireAuth(req, res, next) {
+  const client = getClient(req);
   if (!client || !client.isAuthenticated()) {
     return res.status(401).json({
       error: "UNAUTHENTICATED",
       message: "Bạn chưa đăng nhập Locket. Vui lòng đăng nhập để tiếp tục."
     });
   }
+  req.locketClient = client;
   next();
 }
 
@@ -121,25 +93,19 @@ function requireAuth(req, res, next) {
 
 // 1. Auth Status & Info
 app.get("/api/auth/status", async (req, res) => {
-  const isAuth = client ? client.isAuthenticated() : false;
-  let user = null;
-  if (isAuth) {
-    if (!myProfile) {
-      try {
-        myProfile = await client.user.getProfile();
-      } catch (e) {
-        // Token might need refresh or session expired
-      }
-    }
-    user = myProfile;
+  const client = getClient(req);
+  if (!client || !client.isAuthenticated()) {
+    return res.json({ authenticated: false, user: null });
   }
-  res.json({
-    authenticated: isAuth,
-    user: user || (client && client.session ? { uid: client.session.uid, email: client.session.email } : null)
-  });
+  try {
+    const user = await client.user.getProfile();
+    res.json({ authenticated: true, user });
+  } catch (e) {
+    res.json({ authenticated: false, user: null });
+  }
 });
 
-// 2. Login
+// 2. Login - Returns sessionData to browser without writing to server disk
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -147,16 +113,26 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
-    if (!client) {
-      client = new LocketClient({ sessionPath: SESSION_FILE });
-    }
+    const client = new LocketClient({ sessionPath: null });
     await client.login(email.trim(), password);
-    await refreshCache();
+    const profile = await client.user.getProfile();
+
+    const sessionData = {
+      uid: client.session.uid,
+      email: client.session.email,
+      idToken: client.session.idToken,
+      refreshToken: client.session.refreshToken,
+      expiresAt: client.session.expiresAt,
+      device: client.session.device ? client.session.device.toDict() : null
+    };
+
+    const sessionToken = Buffer.from(JSON.stringify(sessionData)).toString("base64");
 
     res.json({
       success: true,
       message: "Đăng nhập thành công!",
-      user: myProfile || { uid: client.session.uid, email: client.session.email }
+      sessionData: sessionToken,
+      user: profile || { uid: client.session.uid, email: client.session.email }
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -168,25 +144,15 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // 3. Logout
-app.post("/api/auth/logout", async (req, res) => {
-  try {
-    if (fs.existsSync(SESSION_FILE)) {
-      fs.unlinkSync(SESSION_FILE);
-    }
-    client = new LocketClient({ sessionPath: SESSION_FILE });
-    myProfile = null;
-    cachedFriends.clear();
-    res.json({ success: true, message: "Đã đăng xuất thành công." });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.post("/api/auth/logout", (req, res) => {
+  res.json({ success: true, message: "Đã đăng xuất thành công." });
 });
 
 // 4. Current User Profile
 app.get("/api/user/profile", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   try {
     const profile = await client.user.getProfile();
-    myProfile = profile;
     res.json(profile);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -195,11 +161,12 @@ app.get("/api/user/profile", requireAuth, async (req, res) => {
 
 // Update profile name
 app.post("/api/user/profile", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { firstName, lastName } = req.body;
   try {
-    const updated = await client.user.updateName(firstName || "", lastName || "");
-    myProfile = await client.user.getProfile();
-    res.json({ success: true, profile: myProfile });
+    await client.user.updateName(firstName || "", lastName || "");
+    const profile = await client.user.getProfile();
+    res.json({ success: true, profile });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -207,14 +174,15 @@ app.post("/api/user/profile", requireAuth, async (req, res) => {
 
 // Update avatar
 app.post("/api/user/avatar", requireAuth, upload.single("avatar"), async (req, res) => {
+  const client = req.locketClient;
   if (!req.file) {
     return res.status(400).json({ error: "Chưa chọn file ảnh đại diện." });
   }
   const filePath = req.file.path;
   try {
     await client.user.updateAvatar(filePath);
-    myProfile = await client.user.getProfile();
-    res.json({ success: true, profile: myProfile });
+    const profile = await client.user.getProfile();
+    res.json({ success: true, profile });
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
@@ -224,13 +192,9 @@ app.post("/api/user/avatar", requireAuth, upload.single("avatar"), async (req, r
 
 // 5. Friends
 app.get("/api/friends", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   try {
     const friends = await client.friends.getAllFriends();
-    if (Array.isArray(friends)) {
-      for (const f of friends) {
-        cachedFriends.set(f.uid, f);
-      }
-    }
     res.json(friends || []);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -239,6 +203,7 @@ app.get("/api/friends", requireAuth, async (req, res) => {
 
 // Friend requests
 app.get("/api/friends/requests", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   try {
     const requests = await client.friends.getFriendRequests();
     res.json(requests || { incoming: [], outgoing: [] });
@@ -249,6 +214,7 @@ app.get("/api/friends/requests", requireAuth, async (req, res) => {
 
 // Send friend request by username
 app.post("/api/friends/request", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { username } = req.body;
   if (!username) {
     return res.status(400).json({ error: "Username không được để trống." });
@@ -263,13 +229,13 @@ app.post("/api/friends/request", requireAuth, async (req, res) => {
 
 // Accept friend request
 app.post("/api/friends/accept", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { userUid } = req.body;
   if (!userUid) {
     return res.status(400).json({ error: "userUid không hợp lệ." });
   }
   try {
     const result = await client.friends.acceptRequest(userUid);
-    await refreshCache();
     res.json({ success: true, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -278,25 +244,24 @@ app.post("/api/friends/accept", requireAuth, async (req, res) => {
 
 // 6. Moments Feed
 app.get("/api/moments", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   try {
     const limit = parseInt(req.query.limit, 10) || 20;
     const filteredByUserId = req.query.filteredByUserId || null;
     const pageToken = req.query.pageToken || null;
 
-    const data = await client.moments.getMoments({
-      limit,
-      filteredByUserId,
-      pageToken
-    });
+    const [data, friends, myProfile] = await Promise.all([
+      client.moments.getMoments({ limit, filteredByUserId, pageToken }),
+      client.friends.getAllFriends().catch(() => []),
+      client.user.getProfile().catch(() => null)
+    ]);
 
     const moments = (data && data.moments) || [];
-
-    // Ensure cache has friends
-    if (cachedFriends.size === 0) {
-      await refreshCache();
+    const friendsMap = new Map();
+    if (Array.isArray(friends)) {
+      friends.forEach(f => friendsMap.set(f.uid, f));
     }
 
-    // Attach author details
     const myUid = client.session.uid;
     const enrichedMoments = await Promise.all(moments.map(async m => {
       let author = null;
@@ -310,7 +275,7 @@ app.get("/api/moments", requireAuth, async (req, res) => {
           is_me: true
         };
       } else {
-        let friend = cachedFriends.get(m.user_uid);
+        let friend = friendsMap.get(m.user_uid);
         if (!friend && m.user_uid) {
           try {
             const fetched = await client.user.getProfile(m.user_uid);
@@ -322,7 +287,7 @@ app.get("/api/moments", requireAuth, async (req, res) => {
                 username: fetched.username || "",
                 profile_picture_url: fetched.profile_picture_url || null
               };
-              cachedFriends.set(m.user_uid, friend);
+              friendsMap.set(m.user_uid, friend);
             }
           } catch (e) {}
         }
@@ -366,6 +331,7 @@ app.get("/api/moments", requireAuth, async (req, res) => {
 
 // React to moment
 app.post("/api/moments/react", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { momentUid, reaction = "❤️" } = req.body;
   if (!momentUid) {
     return res.status(400).json({ error: "momentUid là bắt buộc." });
@@ -380,6 +346,7 @@ app.post("/api/moments/react", requireAuth, async (req, res) => {
 
 // Get moment views and reactions
 app.get("/api/moments/:momentUid/views", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { momentUid } = req.params;
   try {
     const views = await client.moments.getViews(momentUid);
@@ -391,6 +358,7 @@ app.get("/api/moments/:momentUid/views", requireAuth, async (req, res) => {
 
 // Delete moment
 app.delete("/api/moments/:momentUid", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { momentUid } = req.params;
   try {
     const result = await client.moments.delete(momentUid);
@@ -402,6 +370,7 @@ app.delete("/api/moments/:momentUid", requireAuth, async (req, res) => {
 
 // 7. Post Moment (Photo / Video)
 app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, res) => {
+  const client = req.locketClient;
   if (!req.file) {
     return res.status(400).json({ error: "Vui lòng chọn ảnh hoặc video để đăng." });
   }
@@ -423,20 +392,12 @@ app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, re
 
     let parsedColors = null;
     if (colors) {
-      try {
-        parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors;
-      } catch (e) {
-        parsedColors = null;
-      }
+      try { parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors; } catch (e) {}
     }
 
     let parsedRecipients = null;
     if (recipients) {
-      try {
-        parsedRecipients = typeof recipients === "string" ? JSON.parse(recipients) : recipients;
-      } catch (e) {
-        parsedRecipients = null;
-      }
+      try { parsedRecipients = typeof recipients === "string" ? JSON.parse(recipients) : recipients; } catch (e) {}
     }
 
     const postOptions = {
@@ -476,9 +437,7 @@ app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, re
       message: err.message || "Không thể đăng khoảnh khắc."
     });
   } finally {
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (e) {}
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
   }
 });
 
@@ -489,11 +448,20 @@ app.get("/api/presets", (req, res) => {
 
 // 9. Chat / Conversations
 app.get("/api/chat/conversations", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   try {
-    const convs = await client.chat.getConversations();
-    // Enrich with friend details
+    const [convs, friends] = await Promise.all([
+      client.chat.getConversations(),
+      client.friends.getAllFriends().catch(() => [])
+    ]);
+
+    const friendsMap = new Map();
+    if (Array.isArray(friends)) {
+      friends.forEach(f => friendsMap.set(f.uid, f));
+    }
+
     const enriched = (convs || []).map(c => {
-      const friend = cachedFriends.get(c.peer_uid);
+      const friend = friendsMap.get(c.peer_uid);
       return {
         ...c,
         peer: friend || {
@@ -513,6 +481,7 @@ app.get("/api/chat/conversations", requireAuth, async (req, res) => {
 
 // Chat messages
 app.get("/api/chat/messages", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { otherUserId } = req.query;
   if (!otherUserId) {
     return res.status(400).json({ error: "otherUserId là bắt buộc." });
@@ -527,6 +496,7 @@ app.get("/api/chat/messages", requireAuth, async (req, res) => {
 
 // Send message
 app.post("/api/chat/send", requireAuth, async (req, res) => {
+  const client = req.locketClient;
   const { receiverUid, text } = req.body;
   if (!receiverUid || (!text && text !== "")) {
     return res.status(400).json({ error: "receiverUid và text là bắt buộc." });
@@ -547,7 +517,7 @@ app.use((req, res) => {
 // Start Server
 app.listen(PORT, () => {
   console.log(`===============================================`);
-  console.log(`🚀 Locket Web Server đang chạy tại:`);
+  console.log(`🚀 Locket by Tunggg Web Server đang chạy tại:`);
   console.log(`👉 http://localhost:${PORT}`);
   console.log(`===============================================`);
 });
