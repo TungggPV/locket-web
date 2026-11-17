@@ -18,8 +18,12 @@ const state = {
 function getSessionToken() {
   return sessionStorage.getItem("locket_session") || localStorage.getItem("locket_session") || "";
 }
-function setSessionToken(token) {
-  sessionStorage.setItem("locket_session", token);
+function setSessionToken(token, remember = false) {
+  if (remember) {
+    localStorage.setItem("locket_session", token);
+  } else {
+    sessionStorage.setItem("locket_session", token);
+  }
 }
 function clearSessionToken() {
   sessionStorage.removeItem("locket_session");
@@ -277,7 +281,8 @@ el.loginForm.addEventListener("submit", async e => {
 
     if (res.ok && data.success) {
       showToast("Đăng nhập thành công!", "success");
-      setSessionToken(data.sessionData);
+      const remember = document.getElementById("login-remember")?.checked || false;
+      setSessionToken(data.sessionData, remember);
       el.authScreen.classList.add("hidden");
       state.user = data.user;
       renderCurrentUser();
