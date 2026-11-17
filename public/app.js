@@ -38,6 +38,63 @@ async function apiFetch(url, options = {}) {
   return fetch(url, { ...options, headers });
 }
 
+// ================= Web Audio Synthesizer (Zero External Audio Files) ================= //
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+function playPopSound() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(500, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  } catch (e) {}
+}
+function playShutterSound() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "triangle";
+    osc1.frequency.setValueAtTime(800, ctx.currentTime);
+    gain1.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start();
+    osc1.stop(ctx.currentTime + 0.04);
+
+    setTimeout(() => {
+      try {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(1200, ctx.currentTime);
+        gain2.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start();
+        osc2.stop(ctx.currentTime + 0.05);
+      } catch (e) {}
+    }, 45);
+  } catch (e) {}
+}
+
 // UI Elements
 const el = {
   authScreen: document.getElementById("auth-screen"),
@@ -602,6 +659,7 @@ function renderFeed() {
     return;
   }
 
+  renderStoriesBar();
   el.feedContainer.innerHTML = "";
 
   state.moments.forEach(m => {
@@ -682,7 +740,12 @@ function renderFeed() {
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="🫶">🫶</button>
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="💛">💛</button>
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="😭">😭</button>
+        
+        <div class="moment-comment-row">
+          <input type="text" class="moment-comment-input" placeholder="Phản hồi tới ${escapeHtml(authorName)}..." data-moment="${m.moment_uid}" data-receiver="${m.user_uid}">
+          <button class="btn btn-primary btn-sm btn-send-comment" title="Gửi"><i class="fa-solid fa-paper-plane"></i></button>
         </div>
+</div>
 
         <div class="moment-meta-bar">
           <span class="views-pill btn-view-reactions" data-uid="${m.moment_uid}">
@@ -720,6 +783,40 @@ function renderFeed() {
       a.click();
       a.remove();
     });
+
+    
+    // Attach comment send
+    const commentInput = card.querySelector(".moment-comment-input");
+    const commentBtn = card.querySelector(".btn-send-comment");
+    const sendCardComment = async () => {
+      const text = commentInput.value.trim();
+      if (!text) return;
+      commentInput.value = "";
+      playPopSound();
+      try {
+        const res = await apiFetch("/api/moments/comment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ momentUid: m.moment_uid, receiverUid: m.user_uid, text })
+        });
+        if (res.ok) {
+          showToast(`Đã gửi phản hồi tới ${authorName}!`, "success");
+        } else {
+          showToast("Không thể gửi phản hồi.", "error");
+        }
+      } catch (e) {
+        showToast("Lỗi gửi phản hồi: " + e.message, "error");
+      }
+    };
+    if (commentBtn) commentBtn.addEventListener("click", sendCardComment);
+    if (commentInput) {
+      commentInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          sendCardComment();
+        }
+      });
+    }
 
     // Attach reaction click
     card.querySelectorAll(".reaction-emoji-btn").forEach(btn => {
@@ -759,6 +856,7 @@ function escapeHtml(text) {
 
 // Send reaction
 async function sendReaction(momentUid, emoji, btnElement) {
+  playPopSound();
   try {
     // Pop animation on button
     btnElement.style.transform = "scale(1.5)";
@@ -1362,6 +1460,7 @@ if (btnSwitchCamera) {
 
 if (btnTakeSnapshot) {
   btnTakeSnapshot.addEventListener("click", () => {
+    playShutterSound();
     if (!webcamVideo.videoWidth) return;
     const size = Math.min(webcamVideo.videoWidth, webcamVideo.videoHeight);
     webcamCanvas.width = size;
@@ -1425,5 +1524,282 @@ if (btnDownloadLightbox) {
   });
 }
 
+
+// ================= STORIES BAR & FULLSCREEN STORY VIEWER ================= //
+function renderStoriesBar() {
+  const bar = document.getElementById("stories-bar");
+  if (!bar) return;
+
+  const userMap = new Map();
+  state.moments.forEach(m => {
+    const uid = m.user_uid;
+    if (!userMap.has(uid)) {
+      userMap.set(uid, {
+        author: m.author,
+        moments: []
+      });
+    }
+    userMap.get(uid).moments.push(m);
+  });
+
+  if (userMap.size === 0) {
+    bar.innerHTML = "";
+    return;
+  }
+
+  bar.innerHTML = "";
+  for (const [uid, group] of userMap.entries()) {
+    const author = group.author || {};
+    const name = author.is_me ? "Tôi" : (author.first_name || author.username || "Bạn bè");
+    const avatar = author.profile_picture_url || getDefaultAvatar(name);
+
+    const item = document.createElement("div");
+    item.className = "story-circle-item";
+    item.innerHTML = `
+      <div class="story-avatar-ring">
+        <img src="${avatar}" alt="${name}" class="story-avatar-img">
+      </div>
+      <span class="story-user-label">${escapeHtml(name)}</span>
+    `;
+
+    item.addEventListener("click", () => {
+      openStoryViewer(uid);
+    });
+
+    bar.appendChild(item);
+  }
+}
+
+let activeStoryMoments = [];
+let activeStoryIndex = 0;
+let storyTimer = null;
+
+function openStoryViewer(userUid) {
+  activeStoryMoments = state.moments.filter(m => m.user_uid === userUid);
+  if (!activeStoryMoments.length) return;
+  activeStoryIndex = 0;
+
+  const modal = document.getElementById("story-viewer-modal");
+  if (modal) modal.classList.remove("hidden");
+
+  renderStorySlide();
+}
+
+function renderStorySlide() {
+  clearTimeout(storyTimer);
+  const m = activeStoryMoments[activeStoryIndex];
+  if (!m) {
+    closeStoryViewer();
+    return;
+  }
+
+  const progContainer = document.getElementById("story-progress-segments");
+  if (progContainer) {
+    progContainer.innerHTML = "";
+    activeStoryMoments.forEach((_, idx) => {
+      const seg = document.createElement("div");
+      seg.className = "story-segment";
+      const fill = document.createElement("div");
+      fill.className = `story-segment-fill ${idx < activeStoryIndex ? "completed" : ""}`;
+      if (idx === activeStoryIndex) fill.id = "active-story-fill";
+      seg.appendChild(fill);
+      progContainer.appendChild(seg);
+    });
+  }
+
+  const author = m.author || {};
+  const name = author.is_me ? "Khoảnh khắc của tôi" : (`${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè");
+  const authorNameEl = document.getElementById("story-author-name");
+  const authorAvatarEl = document.getElementById("story-author-avatar");
+  const timeAgoEl = document.getElementById("story-time-ago");
+
+  if (authorNameEl) authorNameEl.textContent = name;
+  if (authorAvatarEl) authorAvatarEl.src = author.profile_picture_url || getDefaultAvatar(name);
+  if (timeAgoEl) timeAgoEl.textContent = formatTimeAgo(m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null));
+
+  const img = document.getElementById("story-img");
+  const vid = document.getElementById("story-vid");
+  const isVideo = Boolean(m.video_url);
+
+  if (isVideo) {
+    if (img) img.classList.add("hidden");
+    if (vid) {
+      vid.classList.remove("hidden");
+      vid.src = m.video_url;
+      vid.currentTime = 0;
+      vid.play().catch(() => {});
+      vid.onended = () => nextStorySlide();
+    }
+  } else {
+    if (vid) {
+      vid.classList.add("hidden");
+      vid.pause();
+    }
+    if (img) {
+      img.classList.remove("hidden");
+      img.src = m.image_url || m.thumbnail_url;
+    }
+  }
+
+  const overlayPill = document.getElementById("story-overlay-pill");
+  const overlay = (m.overlays && m.overlays[0]) ? m.overlays[0] : null;
+  if (overlayPill) {
+    if (m.caption || (overlay && overlay.data && overlay.data.text)) {
+      overlayPill.classList.remove("hidden");
+      let txt = m.caption || "";
+      let icon = "";
+      if (overlay && overlay.data) {
+        if (overlay.data.text) txt = overlay.data.text;
+        const formattedIcon = formatOverlayIcon(overlay.data.icon);
+        if (formattedIcon) icon = formattedIcon;
+      }
+      document.getElementById("story-overlay-text").textContent = txt;
+      document.getElementById("story-overlay-icon").textContent = icon;
+    } else {
+      overlayPill.classList.add("hidden");
+    }
+  }
+
+  const duration = isVideo ? 15000 : 5000;
+  const activeFill = document.getElementById("active-story-fill");
+  if (activeFill) {
+    activeFill.style.transition = `width ${duration}ms linear`;
+    setTimeout(() => { activeFill.style.width = "100%"; }, 25);
+  }
+
+  if (!isVideo) {
+    storyTimer = setTimeout(() => {
+      nextStorySlide();
+    }, duration);
+  }
+}
+
+function nextStorySlide() {
+  if (activeStoryIndex < activeStoryMoments.length - 1) {
+    activeStoryIndex++;
+    renderStorySlide();
+  } else {
+    closeStoryViewer();
+  }
+}
+
+function prevStorySlide() {
+  if (activeStoryIndex > 0) {
+    activeStoryIndex--;
+    renderStorySlide();
+  } else {
+    renderStorySlide();
+  }
+}
+
+function closeStoryViewer() {
+  clearTimeout(storyTimer);
+  const vid = document.getElementById("story-vid");
+  if (vid) vid.pause();
+  const modal = document.getElementById("story-viewer-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function triggerFloatingEmoji(emoji) {
+  playPopSound();
+  const container = document.getElementById("story-floating-reactions");
+  if (!container) return;
+  const el = document.createElement("div");
+  el.className = "floating-emoji";
+  el.textContent = emoji;
+  el.style.left = `${25 + Math.random() * 50}%`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 1800);
+}
+
+// Touch controls for Story Viewer
+const touchPrev = document.getElementById("story-touch-prev");
+const touchNext = document.getElementById("story-touch-next");
+const btnCloseStory = document.getElementById("btn-close-story");
+const btnSoundStory = document.getElementById("btn-sound-toggle-story");
+
+if (touchPrev) touchPrev.addEventListener("click", prevStorySlide);
+if (touchNext) touchNext.addEventListener("click", nextStorySlide);
+if (btnCloseStory) btnCloseStory.addEventListener("click", closeStoryViewer);
+
+if (btnSoundStory) {
+  btnSoundStory.addEventListener("click", () => {
+    const vid = document.getElementById("story-vid");
+    if (vid) {
+      vid.muted = !vid.muted;
+      btnSoundStory.innerHTML = vid.muted
+        ? '<i class="fa-solid fa-volume-xmark"></i>'
+        : '<i class="fa-solid fa-volume-high"></i>';
+    }
+  });
+}
+
+// Story Quick Reaction buttons
+document.querySelectorAll(".story-reaction-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const emoji = btn.dataset.emoji;
+    const m = activeStoryMoments[activeStoryIndex];
+    if (m) {
+      triggerFloatingEmoji(emoji);
+      apiFetch("/api/moments/react", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ momentUid: m.moment_uid, reaction: emoji })
+      }).catch(() => {});
+    }
+  });
+});
+
+// Story Reply input
+const storyReplyInput = document.getElementById("story-reply-input");
+const btnSendStoryReply = document.getElementById("btn-send-story-reply");
+const sendStoryReply = async () => {
+  if (!storyReplyInput) return;
+  const text = storyReplyInput.value.trim();
+  const m = activeStoryMoments[activeStoryIndex];
+  if (!text || !m) return;
+  storyReplyInput.value = "";
+  playPopSound();
+  try {
+    const res = await apiFetch("/api/moments/comment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ momentUid: m.moment_uid, receiverUid: m.user_uid, text })
+    });
+    if (res.ok) {
+      showToast("Đã gửi phản hồi vào tin nhắn!", "success");
+    }
+  } catch (e) {
+    showToast("Lỗi gửi tin nhắn", "error");
+  }
+};
+if (btnSendStoryReply) btnSendStoryReply.addEventListener("click", sendStoryReply);
+if (storyReplyInput) {
+  storyReplyInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendStoryReply();
+    }
+  });
+}
+
+// Global Keyboard Shortcuts
+window.addEventListener("keydown", (e) => {
+  const storyModal = document.getElementById("story-viewer-modal");
+  const isStoryOpen = storyModal && !storyModal.classList.contains("hidden");
+
+  if (e.key === "Escape") {
+    if (isStoryOpen) closeStoryViewer();
+    const lb = document.getElementById("lightbox-modal");
+    if (lb && !lb.classList.contains("hidden")) lb.classList.add("hidden");
+    const cam = document.getElementById("camera-modal");
+    if (cam && !cam.classList.contains("hidden")) stopCamera();
+  } else if (isStoryOpen) {
+    if (e.key === "ArrowLeft") prevStorySlide();
+    if (e.key === "ArrowRight") nextStorySlide();
+  }
+});
+
 // ================= App Start ================= //
+
 checkAuthStatus();

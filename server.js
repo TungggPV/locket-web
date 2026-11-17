@@ -344,6 +344,21 @@ app.post("/api/moments/react", requireAuth, async (req, res) => {
   }
 });
 
+// Comment / Direct Reply to moment
+app.post("/api/moments/comment", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  const { momentUid, receiverUid, text } = req.body;
+  if (!momentUid || !receiverUid || !text) {
+    return res.status(400).json({ error: "Thiếu thông tin bình luận." });
+  }
+  try {
+    const result = await client.moments.comment(momentUid, receiverUid, text.trim());
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get moment views and reactions
 app.get("/api/moments/:momentUid/views", requireAuth, async (req, res) => {
   const client = req.locketClient;

@@ -143,6 +143,13 @@
           </div>
         </div>
 
+        <!-- Stories Carousel Bar -->
+        <div class="stories-section">
+          <div id="stories-bar" class="stories-bar">
+            <!-- Dynamically populated story circles -->
+          </div>
+        </div>
+
         <!-- Feed List Container -->
         <div id="feed-container" class="feed-grid">
           <div class="feed-loading">
@@ -505,6 +512,60 @@
         <div class="feed-loading">
           <div class="spinner"></div>
           <span>Đang tải thông tin...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Fullscreen Story Viewer (Instagram / Locket Style) -->
+  <div id="story-viewer-modal" class="story-viewer-backdrop hidden">
+    <div class="story-viewer-box">
+      <!-- Story Header Progress Bars -->
+      <div id="story-progress-segments" class="story-progress-segments"></div>
+      
+      <!-- Story Author Info -->
+      <div class="story-author-header">
+        <div class="story-author-meta">
+          <img id="story-author-avatar" src="" alt="Avatar" class="story-author-avatar">
+          <div>
+            <span id="story-author-name" class="story-author-name">Tên bạn bè</span>
+            <span id="story-time-ago" class="story-time-ago">2 giờ trước</span>
+          </div>
+        </div>
+        <div class="story-top-actions">
+          <button id="btn-sound-toggle-story" class="btn-icon" style="color:#fff;" title="Bật/Tắt âm thanh"><i class="fa-solid fa-volume-high"></i></button>
+          <button id="btn-close-story" class="btn-icon" style="color:#fff;" title="Đóng Story"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+
+      <!-- Story Media Container -->
+      <div class="story-media-stage" id="story-media-stage">
+        <div class="story-touch-left" id="story-touch-prev" title="Khoảnh khắc trước"></div>
+        <div class="story-touch-right" id="story-touch-next" title="Khoảnh khắc tiếp theo"></div>
+        <img id="story-img" class="story-media-item hidden" alt="Story Image">
+        <video id="story-vid" class="story-media-item hidden" playsinline></video>
+        <div id="story-overlay-pill" class="locket-overlay hidden">
+          <span id="story-overlay-icon" class="overlay-icon"></span>
+          <span id="story-overlay-text" class="overlay-text"></span>
+        </div>
+        <!-- Floating Reactions Container -->
+        <div id="story-floating-reactions" class="story-floating-reactions"></div>
+      </div>
+
+      <!-- Story Footer Reaction & Reply Bar -->
+      <div class="story-footer">
+        <div class="story-quick-reactions">
+          <button class="story-reaction-btn" data-emoji="❤️">❤️</button>
+          <button class="story-reaction-btn" data-emoji="🔥">🔥</button>
+          <button class="story-reaction-btn" data-emoji="😍">😍</button>
+          <button class="story-reaction-btn" data-emoji="😂">😂</button>
+          <button class="story-reaction-btn" data-emoji="🥰">🥰</button>
+          <button class="story-reaction-btn" data-emoji="🫶">🫶</button>
+          <button class="story-reaction-btn" data-emoji="💛">💛</button>
+        </div>
+        <div class="story-reply-row">
+          <input type="text" id="story-reply-input" placeholder="Gửi tin nhắn phản hồi khoảnh khắc..." autocomplete="off">
+          <button id="btn-send-story-reply" class="btn btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i></button>
         </div>
       </div>
     </div>
