@@ -3071,6 +3071,77 @@ input:focus, .form-select:focus {
   box-shadow: 0 0 0 2.5px #0084ff, 0 0 16px rgba(0, 132, 255, 0.7) !important;
 }
 
+/* ================= Smart Photo Auto-Formatter ================= */
+.landscape-formatter-card {
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.08), rgba(0, 114, 255, 0.06));
+  border: 1px solid rgba(255, 204, 0, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+.formatter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.badge-auto-fit {
+  background: linear-gradient(135deg, #0070f3, #00dfd8);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.formatter-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
+.formatter-modes-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.format-mode-btn {
+  padding: 6px 12px;
+  border-radius: 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.format-mode-btn:hover {
+  border-color: var(--accent-yellow);
+  transform: translateY(-1px);
+}
+
+.format-mode-btn.active {
+  background: var(--accent-yellow);
+  color: #000;
+  border-color: var(--accent-yellow);
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);
+}
+
 .vip-badge-pill {
   display: inline-flex;
   align-items: center;

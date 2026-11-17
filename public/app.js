@@ -1144,7 +1144,171 @@ el.momentFileInput.addEventListener("change", e => {
   if (e.target.files.length > 0) handleFileSelected(e.target.files[0]);
 });
 
+// ================= SMART LANDSCAPE PHOTO AUTO-FORMATTER ================= //
+let formatState = {
+  activeMode: "blur",
+  rotation: 0,
+  rawFile: null,
+  isProcessing: false
+};
+
+async function generateFormattedPhoto(rawFile, mode = "blur", rotation = 0) {
+  return new Promise((resolve) => {
+    if (!rawFile) return resolve(null);
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(rawFile);
+    img.src = objectUrl;
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (mode === "original" && rotation === 0) {
+        return resolve(rawFile);
+      }
+
+      const canvas = document.createElement("canvas");
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+
+      if (rotation % 180 !== 0) {
+        w = img.naturalHeight;
+        h = img.naturalWidth;
+      }
+
+      if (mode === "rotate") {
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        ctx.restore();
+      } else {
+        // Standard 1:1 Square Locket Widget Format
+        const maxDim = Math.max(w, h);
+        const targetSize = Math.min(Math.max(maxDim, 1080), 1920);
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext("2d");
+
+        if (mode === "crop") {
+          // Center Crop 1:1
+          const minDim = Math.min(w, h);
+          const sx = (w - minDim) / 2;
+          const sy = (h - minDim) / 2;
+
+          ctx.save();
+          if (rotation !== 0) {
+            const rotCanvas = document.createElement("canvas");
+            rotCanvas.width = w;
+            rotCanvas.height = h;
+            const rCtx = rotCanvas.getContext("2d");
+            rCtx.translate(w / 2, h / 2);
+            rCtx.rotate((rotation * Math.PI) / 180);
+            rCtx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+            ctx.drawImage(rotCanvas, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+          } else {
+            ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+          }
+          ctx.restore();
+        } else if (mode === "black") {
+          // Solid Black Background
+          ctx.fillStyle = "#000000";
+          ctx.fillRect(0, 0, targetSize, targetSize);
+
+          const scale = Math.min(targetSize / w, targetSize / h);
+          const fw = w * scale;
+          const fh = h * scale;
+          const fx = (targetSize - fw) / 2;
+          const fy = (targetSize - fh) / 2;
+
+          ctx.save();
+          ctx.drawImage(img, fx, fy, fw, fh);
+          ctx.restore();
+        } else {
+          // Mode: "blur" (Default - Aesthetic Blurred Backdrop + Full Foreground)
+          // 1. Blurred cover background
+          ctx.save();
+          ctx.filter = "blur(32px) brightness(0.65)";
+          const bgScale = Math.max(targetSize / img.naturalWidth, targetSize / img.naturalHeight) * 1.12;
+          const bgW = img.naturalWidth * bgScale;
+          const bgH = img.naturalHeight * bgScale;
+          ctx.drawImage(img, (targetSize - bgW) / 2, (targetSize - bgH) / 2, bgW, bgH);
+          ctx.restore();
+
+          // 2. Subtle dark overlay
+          ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+          ctx.fillRect(0, 0, targetSize, targetSize);
+
+          // 3. Full uncropped foreground
+          const scale = Math.min(targetSize / img.naturalWidth, targetSize / img.naturalHeight) * 0.96;
+          const fw = img.naturalWidth * scale;
+          const fh = img.naturalHeight * scale;
+          const fx = (targetSize - fw) / 2;
+          const fy = (targetSize - fh) / 2;
+
+          ctx.save();
+          ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+          ctx.shadowBlur = 28;
+          ctx.shadowOffsetY = 10;
+          ctx.drawImage(img, fx, fy, fw, fh);
+          ctx.restore();
+        }
+      }
+
+      canvas.toBlob((blob) => {
+        if (!blob) return resolve(rawFile);
+        const fileName = rawFile.name.replace(/\.[^/.]+$/, "") + "_locket_fit.jpg";
+        const file = new File([blob], fileName, { type: "image/jpeg" });
+        resolve(file);
+      }, "image/jpeg", 0.95);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(rawFile);
+    };
+  });
+}
+
+function initLandscapeFormatter() {
+  document.querySelectorAll(".format-mode-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!formatState.rawFile) return;
+      playPopSound();
+      document.querySelectorAll(".format-mode-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const mode = btn.dataset.mode;
+
+      if (mode === "rotate") {
+        formatState.rotation = (formatState.rotation + 90) % 360;
+      } else {
+        formatState.activeMode = mode;
+      }
+
+      showToast("Đang định dạng lại ảnh...", "info");
+      const formatted = await generateFormattedPhoto(
+        formatState.rawFile,
+        mode === "rotate" ? "rotate" : formatState.activeMode,
+        formatState.rotation
+      );
+
+      if (formatted) {
+        state.selectedFile = formatted;
+        el.previewImage.src = URL.createObjectURL(formatted);
+        el.fileName.textContent = `${formatState.rawFile.name} [${mode.toUpperCase()}]`;
+        el.fileSize.textContent = `${(formatted.size / (1024 * 1024)).toFixed(2)} MB`;
+        updateLiveOverlay();
+        showToast("Đã áp dụng định dạng ảnh mới!", "success");
+      }
+    });
+  });
+}
+
 function handleFileSelected(file) {
+  state.rawOriginalFile = file;
+  formatState.rawFile = file;
+  formatState.rotation = 0;
+  formatState.activeMode = "blur";
+
   state.selectedFile = file;
   const isVideo = file.type.startsWith("video/") || file.name.match(/\.(mp4|mov|webm)$/i);
   state.selectedFileType = isVideo ? "video" : "image";
@@ -1159,7 +1323,11 @@ function handleFileSelected(file) {
   el.previewPlaceholder.classList.add("hidden");
   const fileUrl = URL.createObjectURL(file);
 
+  const formatterBox = document.getElementById("landscape-formatter-box");
+  const dimInfo = document.getElementById("landscape-dim-info");
+
   if (isVideo) {
+    if (formatterBox) formatterBox.classList.add("hidden");
     el.previewImage.classList.add("hidden");
     el.previewVideo.src = fileUrl;
     el.previewVideo.classList.remove("hidden");
@@ -1169,6 +1337,29 @@ function handleFileSelected(file) {
     el.previewVideo.pause();
     el.previewImage.src = fileUrl;
     el.previewImage.classList.remove("hidden");
+
+    // Detect landscape image (PC screenshot, wide photo)
+    const testImg = new Image();
+    testImg.src = fileUrl;
+    testImg.onload = async () => {
+      const isLandscape = testImg.naturalWidth > testImg.naturalHeight * 1.15;
+      if (isLandscape) {
+        if (formatterBox) formatterBox.classList.remove("hidden");
+        if (dimInfo) {
+          dimInfo.textContent = `${testImg.naturalWidth}x${testImg.naturalHeight} (${(testImg.naturalWidth / testImg.naturalHeight).toFixed(2)}:1)`;
+        }
+        // Auto-apply blur format by default!
+        const formatted = await generateFormattedPhoto(file, "blur", 0);
+        if (formatted) {
+          state.selectedFile = formatted;
+          el.previewImage.src = URL.createObjectURL(formatted);
+          el.fileName.textContent = `${file.name} (Đã căn chuẩn 1:1)`;
+          showToast("✨ Đã tự động căn chỉnh ảnh ngang chuẩn Widget Locket (giữ nguyên 100% nội dung)!", "success");
+        }
+      } else {
+        if (formatterBox) formatterBox.classList.add("hidden");
+      }
+    };
   }
 
   updateLiveOverlay();
@@ -1185,6 +1376,11 @@ function resetFileSelection() {
   el.momentFileInput.value = "";
   el.uploadZoneContent.classList.remove("hidden");
   el.selectedFileInfo.classList.add("hidden");
+
+  const formatterBox = document.getElementById("landscape-formatter-box");
+  if (formatterBox) formatterBox.classList.add("hidden");
+  formatState.rawFile = null;
+  formatState.rotation = 0;
 
   el.previewImage.classList.add("hidden");
   el.previewImage.src = "";
@@ -4042,6 +4238,7 @@ initMusicSearch();
 initQRPassModal();
 initMemoriesBackup();
 initLocketVipSuite();
+initLandscapeFormatter();
 
 // Hook favorites and streak on load
 const origRenderCurrentUser = renderCurrentUser;

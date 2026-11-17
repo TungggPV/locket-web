@@ -549,6 +549,36 @@ app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, re
     if (isVideo) {
       postOptions.video = filePath;
     } else {
+      // Auto-format landscape / PC screenshot images to 1:1 with blurred backdrop
+      if (filePath && fs.existsSync(filePath)) {
+        try {
+          const meta = await sharp(filePath).metadata();
+          if (meta.width && meta.height && meta.width > meta.height * 1.15) {
+            console.log(`[AutoFormat]: Formatting landscape image (${meta.width}x${meta.height}) to 1:1 square for Locket Widget`);
+            const size = Math.max(meta.width, meta.height);
+            const blurBg = await sharp(filePath)
+              .resize(size, size, { fit: "cover" })
+              .blur(25)
+              .modulate({ brightness: 0.65 })
+              .toBuffer();
+
+            const scale = size / meta.width;
+            const fgH = Math.round(meta.height * scale);
+            const fg = await sharp(filePath)
+              .resize(size, fgH, { fit: "contain" })
+              .toBuffer();
+
+            const composited = await sharp(blurBg)
+              .composite([{ input: fg, gravity: "center" }])
+              .jpeg({ quality: 95 })
+              .toBuffer();
+
+            fs.writeFileSync(filePath, composited);
+          }
+        } catch (err) {
+          console.warn("[AutoFormat]: Sharp landscape format error:", err.message);
+        }
+      }
       postOptions.image = filePath;
     }
 

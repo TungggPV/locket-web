@@ -302,6 +302,38 @@
                 </div>
               </div>
 
+              <!-- Smart Photo Format Studio (Tự động căn chỉnh ảnh ngang / Chụp màn hình máy tính) -->
+              <div id="landscape-formatter-box" class="landscape-formatter-card hidden">
+                <div class="formatter-header">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <i class="fa-solid fa-crop-simple text-yellow"></i>
+                    <strong>Định dạng chuẩn Widget Locket</strong>
+                    <span class="badge-auto-fit">Tự động nhận diện</span>
+                  </div>
+                  <span class="text-muted" style="font-size:12px;" id="landscape-dim-info">1920x1080 (16:9)</span>
+                </div>
+                <p class="formatter-desc">
+                  Phát hiện ảnh chụp màn hình máy tính / ảnh ngang. Hệ thống tự động căn tỷ lệ 1:1 chuẩn Widget giữ nguyên 100% nội dung không bị cắt xén hay méo hình.
+                </p>
+                <div class="formatter-modes-row">
+                  <button type="button" class="format-mode-btn active" data-mode="blur">
+                    <i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Nền Mờ (Đẹp nhất)
+                  </button>
+                  <button type="button" class="format-mode-btn" data-mode="black">
+                    <i class="fa-solid fa-square" style="color:#555;"></i> Nền Đen
+                  </button>
+                  <button type="button" class="format-mode-btn" data-mode="crop">
+                    <i class="fa-solid fa-scissors"></i> Cắt Vuông 1:1
+                  </button>
+                  <button type="button" class="format-mode-btn" data-mode="rotate">
+                    <i class="fa-solid fa-rotate-right"></i> Xoay 90°
+                  </button>
+                  <button type="button" class="format-mode-btn" data-mode="original">
+                    <i class="fa-regular fa-image"></i> Ảnh Gốc
+                  </button>
+                </div>
+              </div>
+
               <!-- Caption Input -->
               <div class="form-group">
                 <label for="moment-caption">
