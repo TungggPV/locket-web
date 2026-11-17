@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Locket Web - Trải nghiệm Locket Camera trên Web</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💛</text></svg>">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Auth Screen (Shown when not logged in) -->
+  <div id="auth-screen" class="auth-screen hidden">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="locket-logo-circle">
+          <i class="fa-solid fa-camera"></i>
+        </div>
+        <h1>Locket Web</h1>
+        <p class="subtitle">Đăng nhập tài khoản Locket Camera của bạn</p>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <div class="form-group">
+          <label><i class="fa-regular fa-envelope"></i> Email Locket</label>
+          <input type="email" id="login-email" placeholder="example@email.com" required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+          <div class="password-wrapper">
+            <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" id="toggle-password" class="btn-icon"><i class="fa-regular fa-eye"></i></button>
+          </div>
+        </div>
+
+        <div id="login-error" class="error-banner hidden"></div>
+
+        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block">
+          <span>Đăng nhập</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+
+        <p class="auth-note">
+          <i class="fa-solid fa-shield-halved"></i> Thông tin đăng nhập được gửi trực tiếp đến máy chủ Locket qua SDK và lưu phiên an toàn trên máy của bạn.
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main App Container -->
+  <div id="app" class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="locket-mini-logo">
+          <i class="fa-solid fa-camera"></i>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Locket.js</span>
+          <span class="brand-tag">Web Edition</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="feed">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Bảng Tin</span>
+        </button>
+        <button class="nav-item" data-tab="post">
+          <i class="fa-solid fa-circle-plus"></i>
+          <span>Đăng Khoảnh Khắc</span>
+        </button>
+        <button class="nav-item" data-tab="chat">
+          <i class="fa-solid fa-comment-dots"></i>
+          <span>Tin Nhắn</span>
+        </button>
+        <button class="nav-item" data-tab="friends">
+          <i class="fa-solid fa-user-group"></i>
+          <span>Bạn Bè</span>
+        </button>
+        <button class="nav-item" data-tab="profile">
+          <i class="fa-solid fa-user"></i>
+          <span>Tài Khoản</span>
+        </button>
+      </nav>
+
+      <!-- Bottom User Card -->
+      <div class="sidebar-footer">
+        <div class="current-user-pill" id="sidebar-user-pill">
+          <img id="sidebar-avatar" src="" alt="Avatar" class="user-avatar-sm">
+          <div class="user-meta">
+            <span id="sidebar-name" class="user-name">Đang tải...</span>
+            <span id="sidebar-username" class="user-handle">@...</span>
+          </div>
+        </div>
+        <button id="btn-logout" class="btn-icon" title="Đăng xuất">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Mobile Navigation Header -->
+      <header class="mobile-header">
+        <div class="mobile-brand">
+          <i class="fa-solid fa-camera text-yellow"></i>
+          <span>Locket</span>
+        </div>
+        <div class="mobile-user-avatar">
+          <img id="mobile-avatar" src="" alt="Avatar" class="avatar-circle">
+        </div>
+      </header>
+
+      <!-- 1. FEED TAB -->
+      <section id="tab-feed" class="tab-pane active">
+        <div class="feed-header">
+          <div class="feed-title-wrap">
+            <h2>Khoảnh Khắc Bạn Bè</h2>
+            <p class="section-desc">Cập nhật những bức ảnh & video mới nhất từ người thân yêu</p>
+          </div>
+          <div class="feed-actions">
+            <!-- Friend Filter Dropdown -->
+            <select id="feed-filter-friend" class="filter-select">
+              <option value="">👥 Tất cả bạn bè</option>
+            </select>
+            <button id="btn-refresh-feed" class="btn btn-secondary">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Làm mới</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Feed List Container -->
+        <div id="feed-container" class="feed-grid">
+          <div class="feed-loading">
+            <div class="spinner"></div>
+            <span>Đang tải khoảnh khắc...</span>
+          </div>
+        </div>
+
+        <!-- Load More Button -->
+        <div id="feed-load-more" class="load-more-wrap hidden">
+          <button id="btn-load-more-feed" class="btn btn-secondary">
+            <span>Tải thêm khoảnh khắc</span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. POST TAB -->
+      <section id="tab-post" class="tab-pane">
+        <div class="post-studio">
+          <!-- Left Column: Live Phone Mockup Preview -->
+          <div class="preview-column">
+            <div class="phone-frame">
+              <div class="phone-notch"></div>
+              <div class="phone-screen" id="phone-screen">
+                <div class="preview-placeholder" id="preview-placeholder">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <span>Chọn ảnh hoặc video bên cạnh để xem trước</span>
+                </div>
+                <img id="preview-image" class="preview-media hidden" alt="Preview Image">
+                <video id="preview-video" class="preview-media hidden" playsinline controls loop></video>
+
+                <!-- Dynamic Overlay Live Preview -->
+                <div id="preview-overlay" class="locket-overlay hidden">
+                  <span id="overlay-icon" class="overlay-icon"></span>
+                  <span id="overlay-text" class="overlay-text">Caption ở đây</span>
+                </div>
+              </div>
+            </div>
+            <p class="preview-hint"><i class="fa-solid fa-eye"></i> Xem trước hiển thị thực tế trên widget Locket</p>
+          </div>
+
+          <!-- Right Column: Upload & Customize Controls -->
+          <div class="controls-column">
+            <div class="controls-card">
+              <h3><i class="fa-solid fa-sparkles text-yellow"></i> Tạo Khoảnh Khắc Mới</h3>
+
+              <!-- File Uploader -->
+              <div class="upload-zone" id="drop-zone">
+                <input type="file" id="moment-file-input" accept="image/*,video/*" hidden>
+                <div class="upload-zone-content" id="upload-zone-content">
+                  <div class="upload-icon-circle">
+                    <i class="fa-solid fa-camera-retro"></i>
+                  </div>
+                  <h4>Kéo thả ảnh / video vào đây</h4>
+                  <p>Hỗ trợ JPG, PNG, WEBP, MP4, MOV (Lên đến 150MB)</p>
+                  <div class="upload-buttons-row" style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-choose-file">
+                      <i class="fa-solid fa-folder-open"></i> Chọn từ máy tính
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-open-camera">
+                      <i class="fa-solid fa-camera"></i> Chụp từ Camera
+                    </button>
+                  </div>
+                </div>
+                <div id="selected-file-info" class="selected-file-info hidden">
+                  <div class="file-icon"><i class="fa-regular fa-file-image"></i></div>
+                  <div class="file-details">
+                    <span id="file-name" class="file-name">filename.jpg</span>
+                    <span id="file-size" class="file-size">1.2 MB</span>
+                  </div>
+                  <button type="button" id="btn-remove-file" class="btn-icon text-danger" title="Xóa">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Caption Input -->
+              <div class="form-group">
+                <label for="moment-caption">
+                  <span>Dòng trạng thái (Caption)</span>
+                  <span id="caption-count" class="text-muted">0/150</span>
+                </label>
+                <input type="text" id="moment-caption" placeholder="Nhập cảm xúc của bạn..." maxlength="150">
+              </div>
+
+              <!-- NoteType / Preset Picker -->
+              <div class="form-group">
+                <label><i class="fa-solid fa-palette text-yellow"></i> Kiểu nhãn (Preset Locket)</label>
+                <select id="moment-preset-select" class="form-select">
+                  <option value="standard">Tiêu chuẩn (Mặc định)</option>
+                </select>
+              </div>
+
+              <!-- Custom Colors Toggle -->
+              <div class="custom-style-toggle">
+                <label class="switch-label">
+                  <input type="checkbox" id="toggle-custom-style">
+                  <span class="slider round"></span>
+                  <span>Tùy chỉnh màu sắc & Emoji riêng</span>
+                </label>
+              </div>
+
+              <!-- Custom Colors Settings (Collapsible) -->
+              <div id="custom-colors-box" class="custom-colors-box hidden">
+                <div class="color-row">
+                  <div class="color-item">
+                    <label>Màu Gradient 1</label>
+                    <input type="color" id="color-picker-1" value="#FF512F">
+                  </div>
+                  <div class="color-item">
+                    <label>Màu Gradient 2</label>
+                    <input type="color" id="color-picker-2" value="#DD2476">
+                  </div>
+                  <div class="color-item">
+                    <label>Màu chữ</label>
+                    <input type="color" id="color-picker-text" value="#FFFFFF">
+                  </div>
+                </div>
+                <div class="form-group mt-2">
+                  <label>Biểu tượng Emoji</label>
+                  <input type="text" id="custom-emoji-input" placeholder="Ví dụ: 💛, ✨, ☕, 🌅" maxlength="4">
+                </div>
+              </div>
+
+              <!-- Recipients Choice -->
+              <div class="form-group">
+                <label><i class="fa-solid fa-share-nodes"></i> Gửi đến</label>
+                <div class="recipients-options">
+                  <label class="radio-label">
+                    <input type="radio" name="recipient-mode" value="all" checked>
+                    <span>Tất cả bạn bè</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="recipient-mode" value="custom">
+                    <span>Chọn bạn bè cụ thể</span>
+                  </label>
+                </div>
+                <!-- Friend Checklist -->
+                <div id="friends-checklist" class="friends-checklist hidden">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+              <!-- Submit Button -->
+              <button type="button" id="btn-post-moment" class="btn btn-primary btn-block btn-lg">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Đăng Lên Locket Ngay</span>
+              </button>
+
+              <div id="post-progress-box" class="progress-box hidden">
+                <div class="progress-bar-wrap">
+                  <div id="post-progress-bar" class="progress-bar-fill"></div>
+                </div>
+                <span id="post-progress-text">Đang tải lên và xử lý...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. CHAT TAB -->
+      <section id="tab-chat" class="tab-pane">
+        <div class="chat-container">
+          <!-- Chat Sidebar: Conversations List -->
+          <div class="chat-sidebar">
+            <div class="chat-sidebar-header">
+              <h3><i class="fa-solid fa-comments text-yellow"></i> Trò Chuyện</h3>
+            </div>
+            <div id="conversations-list" class="conversations-list">
+              <div class="chat-empty">Đang tải cuộc trò chuyện...</div>
+            </div>
+          </div>
+
+          <!-- Chat Main Area -->
+          <div class="chat-main">
+            <!-- Active Chat Header -->
+            <div id="chat-header" class="chat-header hidden">
+              <div class="chat-peer-info">
+                <img id="chat-peer-avatar" src="" alt="Avatar" class="avatar-circle">
+                <div>
+                  <h4 id="chat-peer-name">Tên bạn bè</h4>
+                  <span id="chat-peer-username" class="text-muted">@username</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Messages Stream -->
+            <div id="chat-messages-wrap" class="chat-messages-wrap">
+              <div class="chat-no-selected">
+                <i class="fa-solid fa-paper-plane text-muted fa-3x"></i>
+                <p>Chọn một bạn bè bên trái để bắt đầu trò chuyện</p>
+              </div>
+            </div>
+
+            <!-- Message Input Bar -->
+            <div id="chat-input-bar" class="chat-input-bar hidden">
+              <input type="text" id="chat-text-input" placeholder="Nhập tin nhắn..." autocomplete="off">
+              <button id="btn-send-message" class="btn btn-primary btn-icon">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. FRIENDS TAB -->
+      <section id="tab-friends" class="tab-pane">
+        <div class="friends-header">
+          <div class="friends-title-wrap">
+            <h2>Bạn Bè Locket (<span id="friends-count">0</span>)</h2>
+            <p class="section-desc">Quản lý danh sách kết bạn và người theo dõi</p>
+          </div>
+          <div class="friends-actions">
+            <div class="search-wrap">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="friend-search-input" placeholder="Tìm bạn theo tên hoặc username...">
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Friend Card -->
+        <div class="add-friend-card">
+          <div class="add-friend-info">
+            <div class="icon-bubble"><i class="fa-solid fa-user-plus"></i></div>
+            <div>
+              <h4>Kết Bạn Mới</h4>
+              <p>Gửi lời mời kết bạn nhanh chóng qua username Locket</p>
+            </div>
+          </div>
+          <div class="add-friend-form">
+            <input type="text" id="add-friend-username" placeholder="Nhập username (ví dụ: alex_locket)">
+            <button id="btn-send-friend-request" class="btn btn-primary">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>Gửi lời mời</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Incoming Requests Box (if any) -->
+        <div id="friend-requests-box" class="friend-requests-box hidden">
+          <h3>Lời mời kết bạn đang chờ</h3>
+          <div id="incoming-requests-list" class="incoming-requests-list"></div>
+        </div>
+
+        <!-- Friends List Grid -->
+        <div id="friends-grid" class="friends-grid">
+          <div class="feed-loading">
+            <div class="spinner"></div>
+            <span>Đang tải danh sách bạn bè...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. PROFILE TAB -->
+      <section id="tab-profile" class="tab-pane">
+        <div class="profile-container">
+          <div class="profile-card">
+            <!-- Profile Banner & Avatar -->
+            <div class="profile-banner">
+              <div class="profile-avatar-wrapper">
+                <img id="profile-card-avatar" src="" alt="Avatar" class="profile-avatar">
+                <label for="avatar-file-input" class="avatar-change-badge" title="Đổi ảnh đại diện">
+                  <i class="fa-solid fa-camera"></i>
+                  <input type="file" id="avatar-file-input" accept="image/*" hidden>
+                </label>
+              </div>
+            </div>
+
+            <div class="profile-body">
+              <h2 id="profile-full-name">Họ Tên</h2>
+              <p id="profile-handle" class="profile-handle">@username</p>
+              <div class="profile-badges">
+                <span class="badge badge-gold"><i class="fa-solid fa-circle-check"></i> Đã xác thực</span>
+                <span class="badge badge-gray" id="profile-uid-badge">UID: ...</span>
+              </div>
+
+              <!-- Edit Name Form -->
+              <div class="profile-section mt-4">
+                <h4><i class="fa-solid fa-pen-to-square"></i> Cập nhật họ tên</h4>
+                <div class="form-row">
+                  <div class="form-group col">
+                    <label>Họ (First Name)</label>
+                    <input type="text" id="profile-first-name" placeholder="Họ">
+                  </div>
+                  <div class="form-group col">
+                    <label>Tên (Last Name)</label>
+                    <input type="text" id="profile-last-name" placeholder="Tên">
+                  </div>
+                </div>
+                <button id="btn-save-name" class="btn btn-secondary">
+                  <i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi
+                </button>
+              </div>
+
+              <!-- System & Session Info -->
+              <div class="profile-section mt-4">
+                <h4><i class="fa-solid fa-info-circle"></i> Thông tin phiên đăng nhập</h4>
+                <div class="info-list">
+                  <div class="info-item">
+                    <span>Email đăng ký:</span>
+                    <strong id="profile-email">email@example.com</strong>
+                  </div>
+                  <div class="info-item">
+                    <span>Engine:</span>
+                    <strong>Node.js locket.js (iOS Emulated)</strong>
+                  </div>
+                  <div class="info-item">
+                    <span>Tự động nén Video:</span>
+                    <strong class="text-success"><i class="fa-solid fa-check"></i> Apple HEVC H.265</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Logout Button -->
+              <div class="profile-actions mt-4">
+                <button id="btn-profile-logout" class="btn btn-danger btn-block">
+                  <i class="fa-solid fa-arrow-right-from-bracket"></i> Đăng xuất tài khoản
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Mobile Navigation Bar -->
+    <nav class="mobile-nav-bar">
+      <button class="mobile-nav-item active" data-tab="feed">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>Bảng Tin</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="post">
+        <i class="fa-solid fa-circle-plus"></i>
+        <span>Đăng</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="chat">
+        <i class="fa-solid fa-comment-dots"></i>
+        <span>Chat</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="friends">
+        <i class="fa-solid fa-user-group"></i>
+        <span>Bạn Bè</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="profile">
+        <i class="fa-solid fa-user"></i>
+        <span>Tài Khoản</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Modal: Views & Reactions -->
+  <div id="views-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-heart text-danger"></i> Lượt Xem & Cảm Xúc</h3>
+        <button id="btn-close-views-modal" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="views-modal-body">
+        <div class="feed-loading">
+          <div class="spinner"></div>
+          <span>Đang tải thông tin...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Live Camera Capture -->
+  <div id="camera-modal" class="modal-backdrop hidden">
+    <div class="modal-box camera-modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-camera text-yellow"></i> Chụp Ảnh Locket</h3>
+        <button id="btn-close-camera-modal" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body camera-modal-body" style="padding:0;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+        <video id="webcam-video" playsinline autoplay muted style="width:100%;height:380px;object-fit:cover;transform:scaleX(-1);"></video>
+        <canvas id="webcam-canvas" class="hidden"></canvas>
+        <div class="camera-controls-bar">
+          <button id="btn-switch-camera" class="btn-icon camera-action-btn" title="Đổi camera"><i class="fa-solid fa-camera-rotate"></i></button>
+          <button id="btn-take-snapshot" class="snapshot-shutter-btn" title="Chụp ảnh"></button>
+          <div style="width:40px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Lightbox Fullscreen Media Viewer -->
+  <div id="lightbox-modal" class="modal-backdrop hidden" style="background:rgba(0,0,0,0.92);">
+    <div style="position:absolute;top:20px;right:20px;display:flex;gap:12px;z-index:10001;">
+      <button id="btn-download-lightbox" class="btn-icon" style="color:#fff;background:rgba(255,255,255,0.15);font-size:20px;" title="Tải về máy"><i class="fa-solid fa-download"></i></button>
+      <button id="btn-close-lightbox" class="btn-icon" style="color:#fff;background:rgba(255,255,255,0.15);font-size:20px;" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="lightbox-content" style="max-width:90vw;max-height:85vh;display:flex;align-items:center;justify-content:center;">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

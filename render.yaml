@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: locket-web
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
