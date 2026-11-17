@@ -3026,6 +3026,51 @@ input:focus, .form-select:focus {
    MEGA UPDATE 3: LOCKET GOLD VIP MEMBERSHIP SUITE
    ========================================================================== */
 
+/* ================= Admin Verified Blue Tick ================= */
+.admin-blue-tick {
+  color: #0084ff !important;
+  font-size: 14.5px;
+  vertical-align: middle;
+  margin-left: 4px;
+  filter: drop-shadow(0 0 6px rgba(0, 132, 255, 0.7));
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge-admin-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #0066ff, #00c6ff);
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1.5px 6.5px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 102, 255, 0.55);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  vertical-align: middle;
+  margin-left: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.badge-admin-verified i {
+  font-size: 10px;
+}
+
+.badge-admin {
+  background: linear-gradient(135deg, rgba(0, 102, 255, 0.22), rgba(0, 198, 255, 0.16)) !important;
+  color: #00c6ff !important;
+  border: 1px solid rgba(0, 198, 255, 0.5) !important;
+  box-shadow: 0 0 12px rgba(0, 198, 255, 0.35) !important;
+  font-weight: 800 !important;
+}
+
+.admin-avatar-ring {
+  box-shadow: 0 0 0 2.5px #0084ff, 0 0 16px rgba(0, 132, 255, 0.7) !important;
+}
+
 .vip-badge-pill {
   display: inline-flex;
   align-items: center;

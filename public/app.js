@@ -384,29 +384,83 @@ async function handleLogout() {
 el.btnLogout.addEventListener("click", handleLogout);
 el.btnProfileLogout.addEventListener("click", handleLogout);
 
+function isInitialAdminUser(user) {
+  if (!user) return false;
+  const email = (user.email || "").toLowerCase();
+  const username = (user.username || "").toLowerCase();
+  const firstName = (user.first_name || "").toLowerCase();
+  const lastName = (user.last_name || "").toLowerCase();
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  // Primary check for the user's initial account credentials
+  if (email.includes("tungpham020105") || email.includes("tungpham") || email.includes("vantung")) return true;
+  if (username.includes("tung") || username.includes("tunggg")) return true;
+  if (fullName.includes("tùng") || fullName.includes("tung")) return true;
+
+  // Initial account UID binding on this browser
+  const storedAdminUid = localStorage.getItem("locket_initial_admin_uid");
+  if (!storedAdminUid && user.uid) {
+    localStorage.setItem("locket_initial_admin_uid", user.uid);
+    return true;
+  }
+  if (storedAdminUid && storedAdminUid === user.uid) {
+    return true;
+  }
+
+  return false;
+}
+
 function renderCurrentUser() {
   if (!state.user) return;
   const fullName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.username || "Tôi";
   const avatarUrl = state.user.profile_picture_url || getDefaultAvatar(fullName);
+  const isAdmin = isInitialAdminUser(state.user);
+  state.isAdmin = isAdmin;
+
+  const adminTickHtml = isAdmin
+    ? ` <span class="admin-blue-tick" title="Quản trị viên đã xác minh (Admin Verified)"><i class="fa-solid fa-circle-check"></i></span> <span class="badge-admin-verified"><i class="fa-solid fa-shield-halved"></i> ADMIN</span>`
+    : "";
 
   el.sidebarAvatar.src = avatarUrl;
   el.mobileAvatar.src = avatarUrl;
-  el.sidebarName.innerHTML = `${escapeHtml(fullName)} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
+  el.sidebarName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
   el.sidebarUsername.textContent = `@${state.user.username || "me"}`;
 
-  // VIP Avatar Glow
+  // VIP & Admin Avatar Glow
   el.sidebarAvatar.classList.add("vip-avatar-glow");
   el.mobileAvatar.classList.add("vip-avatar-glow");
+  if (isAdmin) {
+    el.sidebarAvatar.classList.add("admin-avatar-ring");
+    el.mobileAvatar.classList.add("admin-avatar-ring");
+  } else {
+    el.sidebarAvatar.classList.remove("admin-avatar-ring");
+    el.mobileAvatar.classList.remove("admin-avatar-ring");
+  }
 
   // Profile tab fields
   el.profileCardAvatar.src = avatarUrl;
   el.profileCardAvatar.classList.add("vip-avatar-glow");
-  el.profileFullName.innerHTML = `${escapeHtml(fullName)} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
+  if (isAdmin) {
+    el.profileCardAvatar.classList.add("admin-avatar-ring");
+  } else {
+    el.profileCardAvatar.classList.remove("admin-avatar-ring");
+  }
+  el.profileFullName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
   el.profileHandle.textContent = `@${state.user.username || "me"}`;
   el.profileUidBadge.textContent = `UID: ${state.user.uid || "..."}`;
   el.profileFirstName.value = state.user.first_name || "";
   el.profileLastName.value = state.user.last_name || "";
   el.profileEmail.textContent = state.user.email || "Đã liên kết";
+
+  // Admin Badge in Profile Badges list
+  const profileAdminBadge = document.getElementById("profile-admin-badge");
+  if (profileAdminBadge) {
+    if (isAdmin) {
+      profileAdminBadge.classList.remove("hidden");
+    } else {
+      profileAdminBadge.classList.add("hidden");
+    }
+  }
 
   // VIP Card details
   const vipHolder = document.getElementById("vip-card-holder");
@@ -777,6 +831,10 @@ function renderFeed() {
 
     // Delete button if author is me
     const isMe = author.is_me;
+    const authorIsAdmin = isMe && isInitialAdminUser(state.user);
+    const authorAdminTick = authorIsAdmin
+      ? ` <span class="admin-blue-tick" title="Admin Tích Xanh chính thức"><i class="fa-solid fa-circle-check"></i></span>`
+      : "";
     const deleteBtnHtml = isMe
       ? `<button class="btn-icon text-danger btn-delete-moment" data-uid="${m.moment_uid}" title="Xóa khoảnh khắc"><i class="fa-regular fa-trash-can"></i></button>`
       : "";
@@ -784,9 +842,9 @@ function renderFeed() {
     card.innerHTML = `
       <div class="moment-header">
         <div class="moment-author">
-          <img src="${authorAvatar}" alt="${authorName}" class="author-avatar ${isMe ? 'vip-avatar-glow' : ''}">
+          <img src="${authorAvatar}" alt="${authorName}" class="author-avatar ${isMe ? 'vip-avatar-glow' : ''} ${authorIsAdmin ? 'admin-avatar-ring' : ''}">
           <div class="author-info">
-            <span class="author-name">${escapeHtml(authorName)}${isMe ? ' <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>' : ''}</span>
+            <span class="author-name">${escapeHtml(authorName)}${authorAdminTick}${isMe ? ' <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>' : ''}</span>
             <span class="moment-time">${timeAgo}</span>
           </div>
         </div>
@@ -3035,6 +3093,10 @@ function renderDayMoments(dateKey, moments) {
 
     const dt = m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : new Date());
     const timeStr = new Date(dt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const authorIsAdmin = author.is_me && isInitialAdminUser(state.user);
+    const authorAdminTick = authorIsAdmin
+      ? ` <span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>`
+      : "";
 
     card.innerHTML = `
       <div class="day-card-media-wrap" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;background:#000;">
@@ -3045,9 +3107,9 @@ function renderDayMoments(dateKey, moments) {
       </div>
       <div class="day-card-info" style="margin-top:8px;">
         <div class="day-card-author" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <img src="${escapeHtml(authorAvatar)}" class="avatar-sm" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" alt="${escapeHtml(authorName)}">
+          <img src="${escapeHtml(authorAvatar)}" class="avatar-sm ${authorIsAdmin ? 'admin-avatar-ring' : ''}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" alt="${escapeHtml(authorName)}">
           <div style="flex:1;overflow:hidden;">
-            <strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(authorName)}</strong>
+            <strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(authorName)}${authorAdminTick}</strong>
             <span class="text-muted" style="font-size:11px;">${timeStr}</span>
           </div>
         </div>
@@ -3388,17 +3450,24 @@ function initQRPassModal() {
   if (!modal) return;
 
   function renderQRPass() {
-    const user = state.currentUser || {};
+    const user = state.user || state.currentUser || {};
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "Thành viên Locket";
     const username = user.username || "locket";
     const avatar = user.profile_picture_url || getDefaultAvatar(name);
+    const isAdmin = isInitialAdminUser(user);
 
     const nameEl = document.getElementById("qr-pass-name");
     const handleEl = document.getElementById("qr-pass-handle");
     const avatarEl = document.getElementById("qr-pass-avatar");
-    if (nameEl) nameEl.textContent = name;
+    if (nameEl) {
+      nameEl.innerHTML = `${escapeHtml(name)}${isAdmin ? ' <span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>' : ''}`;
+    }
     if (handleEl) handleEl.textContent = `@${username}`;
-    if (avatarEl) avatarEl.src = avatar;
+    if (avatarEl) {
+      avatarEl.src = avatar;
+      if (isAdmin) avatarEl.classList.add("admin-avatar-ring");
+      else avatarEl.classList.remove("admin-avatar-ring");
+    }
 
     const inviteUrl = `https://locket.cam/${username}`;
     const canvas = document.getElementById("qr-canvas");
@@ -3919,6 +3988,8 @@ function initLocketVipSuite() {
       ctx.lineTo(840, 340);
       ctx.stroke();
 
+      const isAdmin = isInitialAdminUser(user);
+
       // Details Columns
       // Cardholder
       ctx.fillStyle = "#8e8d96";
@@ -3926,7 +3997,7 @@ function initLocketVipSuite() {
       ctx.fillText("HỘI VIÊN SỞ HỮU", 60, 385);
       ctx.fillStyle = "#ffd700";
       ctx.font = "bold 24px -apple-system, sans-serif";
-      ctx.fillText(name.toUpperCase(), 60, 425);
+      ctx.fillText(name.toUpperCase() + (isAdmin ? " ✔" : ""), 60, 425);
 
       // Expiry
       ctx.fillStyle = "#8e8d96";
@@ -3940,9 +4011,9 @@ function initLocketVipSuite() {
       ctx.fillStyle = "#8e8d96";
       ctx.font = "bold 13px -apple-system, sans-serif";
       ctx.fillText("CẤP BẬC", 650, 385);
-      ctx.fillStyle = "#ffd700";
-      ctx.font = "bold 22px -apple-system, sans-serif";
-      ctx.fillText("SUPREME VIP 👑", 650, 425);
+      ctx.fillStyle = isAdmin ? "#00c6ff" : "#ffd700";
+      ctx.font = "bold 20px -apple-system, sans-serif";
+      ctx.fillText(isAdmin ? "ROOT ADMIN 🛡️" : "SUPREME VIP 👑", 650, 425);
 
       // Watermark
       ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
