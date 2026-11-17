@@ -304,6 +304,7 @@ async function checkAuthStatus() {
       el.authScreen.classList.add("hidden");
       state.user = data.user;
       renderCurrentUser();
+  updateStatsAndLeaderboard();
       await Promise.all([loadFriends(), loadPresets()]);
       loadFeed();
     } else {
@@ -1800,6 +1801,225 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+
+// ================= THEME SWITCHER (Gold, Purple, Blue, Pink, AMOLED) ================= //
+const THEMES = [
+  { id: "gold", name: "Locket Classic Gold 💛" },
+  { id: "purple", name: "Cyberpunk Purple 💜" },
+  { id: "blue", name: "Deep Ocean Blue 💙" },
+  { id: "pink", name: "Sakura Pink 💖" },
+  { id: "amoled", name: "Pure AMOLED Black 🖤" }
+];
+let currentThemeIndex = 0;
+
+function applyTheme(themeId) {
+  if (themeId === "gold") {
+    document.body.removeAttribute("data-theme");
+  } else {
+    document.body.setAttribute("data-theme", themeId);
+  }
+  localStorage.setItem("locket_theme", themeId);
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem("locket_theme") || "gold";
+  const idx = THEMES.findIndex(t => t.id === savedTheme);
+  currentThemeIndex = idx >= 0 ? idx : 0;
+  applyTheme(savedTheme);
+}
+
+function cycleTheme() {
+  playPopSound();
+  currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+  const theme = THEMES[currentThemeIndex];
+  applyTheme(theme.id);
+  showToast(`Đã chuyển sang chủ đề: ${theme.name}`, "info");
+}
+
+const btnTheme = document.getElementById("btn-theme-switcher");
+const btnMobileTheme = document.getElementById("btn-mobile-theme");
+if (btnTheme) btnTheme.addEventListener("click", cycleTheme);
+if (btnMobileTheme) btnMobileTheme.addEventListener("click", cycleTheme);
+initTheme();
+
+// ================= PHOTO FILTERS & MUSIC STICKER IN STUDIO ================= //
+let currentFilter = "normal";
+
+document.querySelectorAll(".filter-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    playPopSound();
+    document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.filter;
+
+    const img = document.getElementById("preview-image");
+    const vid = document.getElementById("preview-video");
+    ["filter-vintage", "filter-cyberpunk", "filter-bw", "filter-sunset", "filter-cold"].forEach(c => {
+      if (img) img.classList.remove(c);
+      if (vid) vid.classList.remove(c);
+    });
+
+    if (currentFilter !== "normal") {
+      const cls = `filter-${currentFilter}`;
+      if (img) img.classList.add(cls);
+      if (vid) vid.classList.add(cls);
+    }
+  });
+});
+
+// Quick Sticker Chips
+document.querySelectorAll(".sticker-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    playPopSound();
+    const text = chip.dataset.text;
+    const inp = document.getElementById("moment-caption");
+    if (inp) {
+      inp.value = inp.value ? `${inp.value} ${text}` : text;
+      inp.dispatchEvent(new Event("input"));
+    }
+  });
+});
+
+// Music Sticker Toggle
+const toggleMusic = document.getElementById("toggle-music-sticker");
+const musicBox = document.getElementById("music-sticker-box");
+const musicBadge = document.getElementById("preview-music-badge");
+const songInput = document.getElementById("music-song-name");
+const artistInput = document.getElementById("music-artist-name");
+
+function updateMusicPreview() {
+  if (!toggleMusic || !toggleMusic.checked) {
+    if (musicBadge) musicBadge.classList.add("hidden");
+    return;
+  }
+  if (musicBadge) musicBadge.classList.remove("hidden");
+  const s = songInput ? songInput.value.trim() : "";
+  const a = artistInput ? artistInput.value.trim() : "";
+  const songEl = document.getElementById("music-preview-song");
+  const artistEl = document.getElementById("music-preview-artist");
+  if (songEl) songEl.textContent = s || "Tên bài hát";
+  if (artistEl) artistEl.textContent = a || "Nghệ sĩ";
+}
+
+if (toggleMusic) {
+  toggleMusic.addEventListener("change", (e) => {
+    if (e.target.checked) {
+      if (musicBox) musicBox.classList.remove("hidden");
+    } else {
+      if (musicBox) musicBox.classList.add("hidden");
+    }
+    updateMusicPreview();
+  });
+}
+if (songInput) songInput.addEventListener("input", updateMusicPreview);
+if (artistInput) artistInput.addEventListener("input", updateMusicPreview);
+
+// ================= DATE MEMORY FILTER IN FEED ================= //
+const feedDateFilter = document.getElementById("feed-filter-date");
+if (feedDateFilter) {
+  feedDateFilter.addEventListener("change", (e) => {
+    const selectedDate = e.target.value;
+    if (!selectedDate) {
+      renderFeed();
+      return;
+    }
+    const filtered = state.moments.filter(m => {
+      const d = m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null);
+      if (!d) return false;
+      const isoDate = new Date(d).toISOString().split("T")[0];
+      return isoDate === selectedDate;
+    });
+
+    if (filtered.length === 0) {
+      showToast(`Không có khoảnh khắc nào trong ngày ${selectedDate}`, "info");
+    } else {
+      showToast(`Tìm thấy ${filtered.length} khoảnh khắc trong ngày ${selectedDate}`, "success");
+    }
+    renderFilteredMoments(filtered);
+  });
+}
+
+function renderFilteredMoments(momentsList) {
+  el.feedContainer.innerHTML = "";
+  if (!momentsList.length) {
+    el.feedContainer.innerHTML = `
+      <div class="chat-empty">
+        <i class="fa-regular fa-calendar-xmark fa-2x"></i>
+        <span>Không tìm thấy khoảnh khắc nào trong ngày đã chọn.</span>
+      </div>
+    `;
+    return;
+  }
+  // Reuse render logic
+  const original = state.moments;
+  state.moments = momentsList;
+  renderFeed();
+  state.moments = original;
+}
+
+// ================= STATS & BEST FRIENDS LEADERBOARD ================= //
+function updateStatsAndLeaderboard() {
+  const statMoments = document.getElementById("stat-total-moments");
+  const statFriends = document.getElementById("stat-total-friends");
+  const statPosters = document.getElementById("stat-active-posters");
+
+  if (statMoments) statMoments.textContent = state.moments.length;
+  if (statFriends) statFriends.textContent = state.friends.length;
+
+  // Compute friend activity count
+  const activityMap = new Map();
+  state.moments.forEach(m => {
+    if (!m.author || m.author.is_me) return;
+    const uid = m.user_uid;
+    if (!activityMap.has(uid)) {
+      activityMap.set(uid, {
+        author: m.author,
+        count: 0
+      });
+    }
+    activityMap.get(uid).count++;
+  });
+
+  if (statPosters) statPosters.textContent = activityMap.size;
+
+  // Render leaderboard
+  const board = document.getElementById("top-friends-leaderboard");
+  if (!board) return;
+
+  const sorted = Array.from(activityMap.values()).sort((a, b) => b.count - a.count).slice(0, 5);
+  if (sorted.length === 0) {
+    board.innerHTML = '<div class="text-muted" style="font-size:13px;padding:8px 0;">Chưa có dữ liệu bảng xếp hạng.</div>';
+    return;
+  }
+
+  board.innerHTML = "";
+  sorted.forEach((item, idx) => {
+    const author = item.author;
+    const name = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+    const avatar = author.profile_picture_url || getDefaultAvatar(name);
+
+    let medal = `#${idx + 1}`;
+    let rankCls = `rank-${idx + 1}`;
+    if (idx === 0) medal = "🥇";
+    if (idx === 1) medal = "🥈";
+    if (idx === 2) medal = "🥉";
+
+    const row = document.createElement("div");
+    row.className = "top-friend-row";
+    row.innerHTML = `
+      <span class="top-friend-rank ${rankCls}">${medal}</span>
+      <img src="${avatar}" alt="${name}" class="top-friend-avatar">
+      <div class="top-friend-meta">
+        <div class="top-friend-name">${escapeHtml(name)}</div>
+        <span class="text-muted" style="font-size:12px;">@${author.username || ""}</span>
+      </div>
+      <span class="top-friend-score">${item.count} khoảnh khắc</span>
+    `;
+    board.appendChild(row);
+  });
+}
+
 // ================= App Start ================= //
+
 
 checkAuthStatus();

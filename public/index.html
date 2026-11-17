@@ -105,9 +105,14 @@
             <span id="sidebar-username" class="user-handle">@...</span>
           </div>
         </div>
-        <button id="btn-logout" class="btn-icon" title="Đăng xuất">
-          <i class="fa-solid fa-arrow-right-from-bracket"></i>
-        </button>
+        <div style="display:flex;gap:4px;">
+          <button id="btn-theme-switcher" class="btn-icon" title="Đổi chủ đề giao diện">
+            <i class="fa-solid fa-palette"></i>
+          </button>
+          <button id="btn-logout" class="btn-icon" title="Đăng xuất">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -119,8 +124,13 @@
           <i class="fa-solid fa-camera text-yellow"></i>
           <span>Locket by Tunggg</span>
         </div>
-        <div class="mobile-user-avatar">
-          <img id="mobile-avatar" src="" alt="Avatar" class="avatar-circle">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="btn-mobile-theme" class="btn-icon" title="Đổi chủ đề giao diện">
+            <i class="fa-solid fa-palette text-yellow"></i>
+          </button>
+          <div class="mobile-user-avatar">
+            <img id="mobile-avatar" src="" alt="Avatar" class="avatar-circle">
+          </div>
         </div>
       </header>
 
@@ -136,6 +146,8 @@
             <select id="feed-filter-friend" class="filter-select">
               <option value="">👥 Tất cả bạn bè</option>
             </select>
+            <!-- Date Memory Filter -->
+            <input type="date" id="feed-filter-date" class="filter-select" title="Lọc theo ngày">
             <button id="btn-refresh-feed" class="btn btn-secondary">
               <i class="fa-solid fa-rotate"></i>
               <span>Làm mới</span>
@@ -187,6 +199,18 @@
                   <span id="overlay-icon" class="overlay-icon"></span>
                   <span id="overlay-text" class="overlay-text">Caption ở đây</span>
                 </div>
+
+                <!-- Music Sticker Live Preview -->
+                <div id="preview-music-badge" class="music-sticker-badge hidden">
+                  <span class="vinyl-disc">💿</span>
+                  <div class="music-info-text">
+                    <span id="music-preview-song" class="music-song">Tên bài hát</span>
+                    <span id="music-preview-artist" class="music-artist">Nghệ sĩ</span>
+                  </div>
+                  <div class="sound-waves">
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                </div>
               </div>
             </div>
             <p class="preview-hint"><i class="fa-solid fa-eye"></i> Xem trước hiển thị thực tế trên widget Locket</p>
@@ -234,6 +258,56 @@
                   <span id="caption-count" class="text-muted">0/150</span>
                 </label>
                 <input type="text" id="moment-caption" placeholder="Nhập cảm xúc của bạn..." maxlength="150">
+              </div>
+
+              <!-- Photo Filters -->
+              <div class="form-group">
+                <label><i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Bộ lọc màu (Photo Filters)</label>
+                <div class="filters-pill-group" id="filters-pill-group">
+                  <button type="button" class="filter-pill active" data-filter="normal">Gốc</button>
+                  <button type="button" class="filter-pill" data-filter="vintage">Vintage 🎞️</button>
+                  <button type="button" class="filter-pill" data-filter="cyberpunk">Cyberpunk 🔮</button>
+                  <button type="button" class="filter-pill" data-filter="bw">Đen Trắng 🖤</button>
+                  <button type="button" class="filter-pill" data-filter="sunset">Hoàng Hôn 🌅</button>
+                  <button type="button" class="filter-pill" data-filter="cold">Băng Giá ❄️</button>
+                </div>
+              </div>
+
+              <!-- Quick Status Stickers -->
+              <div class="form-group">
+                <label><i class="fa-solid fa-icons text-yellow"></i> Sticker & Trạng thái nhanh</label>
+                <div class="quick-stickers-row">
+                  <button type="button" class="sticker-chip" data-text="Đi cafe ☕">☕ Cafe</button>
+                  <button type="button" class="sticker-chip" data-text="Chill cuối tuần 🎧">🎧 Chill</button>
+                  <button type="button" class="sticker-chip" data-text="Đang ăn uống 🍜">🍜 Ăn uống</button>
+                  <button type="button" class="sticker-chip" data-text="Cháy phố 🔥">🔥 Cháy phố</button>
+                  <button type="button" class="sticker-chip" data-text="Đang học bài 📚">📚 Học bài</button>
+                  <button type="button" class="sticker-chip" data-text="Vi vu du lịch 🏖️">🏖️ Du lịch</button>
+                  <button type="button" class="sticker-chip" data-text="Buồn ngủ quá 💤">💤 Ngủ thôi</button>
+                </div>
+              </div>
+
+              <!-- Music Sticker Toggle -->
+              <div class="custom-style-toggle">
+                <label class="switch-label">
+                  <input type="checkbox" id="toggle-music-sticker">
+                  <span class="slider round"></span>
+                  <span><i class="fa-solid fa-music"></i> Gắn bài hát đang nghe (Now Playing)</span>
+                </label>
+              </div>
+
+              <!-- Music Sticker Inputs -->
+              <div id="music-sticker-box" class="custom-colors-box hidden">
+                <div class="form-row">
+                  <div class="form-group col">
+                    <label>Tên bài hát</label>
+                    <input type="text" id="music-song-name" placeholder="Ví dụ: APT., Chúng Ta Của Tương Lai">
+                  </div>
+                  <div class="form-group col">
+                    <label>Nghệ sĩ / Ca sĩ</label>
+                    <input type="text" id="music-artist-name" placeholder="Ví dụ: ROSÉ, Sơn Tùng M-TP">
+                  </div>
+                </div>
               </div>
 
               <!-- NoteType / Preset Picker -->
@@ -425,6 +499,33 @@
               <div class="profile-badges">
                 <span class="badge badge-gold"><i class="fa-solid fa-circle-check"></i> Đã xác thực</span>
                 <span class="badge badge-gray" id="profile-uid-badge">UID: ...</span>
+              </div>
+
+              <!-- Activity Stats Overview -->
+              <div class="profile-section mt-4">
+                <h4><i class="fa-solid fa-chart-simple text-yellow"></i> Thống kê hoạt động Locket</h4>
+                <div class="stats-overview-grid">
+                  <div class="stat-card">
+                    <span class="stat-number" id="stat-total-moments">0</span>
+                    <span class="stat-title">Khoảnh khắc đã xem</span>
+                  </div>
+                  <div class="stat-card">
+                    <span class="stat-number" id="stat-total-friends">0</span>
+                    <span class="stat-title">Bạn bè kết nối</span>
+                  </div>
+                  <div class="stat-card">
+                    <span class="stat-number" id="stat-active-posters">0</span>
+                    <span class="stat-title">Bạn bè đang hoạt động</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Top Best Friends Leaderboard -->
+              <div class="profile-section mt-4">
+                <h4><i class="fa-solid fa-trophy text-yellow"></i> Bảng xếp hạng bạn thân (Top Friends)</h4>
+                <div id="top-friends-leaderboard" class="top-friends-list">
+                  <!-- Populated by JS -->
+                </div>
               </div>
 
               <!-- Edit Name Form -->
