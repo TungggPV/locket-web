@@ -186,6 +186,20 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// ================= KEEP-ALIVE & HEALTH CHECK ================= //
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "locket-by-tunggg",
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/ping", (req, res) => {
+  res.status(200).send("pong");
+});
+
 // ================= API ROUTES ================= //
 
 // 1. Auth Status & Info
