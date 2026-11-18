@@ -342,6 +342,7 @@ el.loginForm.addEventListener("submit", async e => {
     if (res.ok && data.success) {
       showToast("Đăng nhập thành công!", "success");
       const remember = document.getElementById("login-remember")?.checked || false;
+      state.isDemoMode = false;
       setSessionToken(data.sessionData, remember);
       el.authScreen.classList.add("hidden");
       state.user = data.user;
@@ -361,6 +362,22 @@ el.loginForm.addEventListener("submit", async e => {
   }
 });
 
+// Guest Studio Preview button
+const btnDemoPreview = document.getElementById("btn-demo-preview");
+if (btnDemoPreview) {
+  btnDemoPreview.addEventListener("click", () => {
+    state.isDemoMode = true;
+    el.authScreen.classList.add("hidden");
+    const guestAvatar = getDefaultAvatar("Locket");
+    el.sidebarAvatar.src = guestAvatar;
+    el.mobileAvatar.src = guestAvatar;
+    el.sidebarName.textContent = "Khách xem trước";
+    el.sidebarUsername.textContent = "@studio_preview";
+    switchTab("post");
+    showToast("✨ Chế độ xem trước Studio! Đăng nhập để kết nối bạn bè & đăng lên Locket.", "info");
+  });
+}
+
 // Toggle password view
 el.togglePassword.addEventListener("click", () => {
   const type = el.loginPassword.type === "password" ? "text" : "password";
@@ -370,11 +387,17 @@ el.togglePassword.addEventListener("click", () => {
 
 // Logout
 async function handleLogout() {
+  if (state.isDemoMode && !getSessionToken()) {
+    state.isDemoMode = false;
+    el.authScreen.classList.remove("hidden");
+    return;
+  }
   if (!confirm("Bạn có chắc chắn muốn đăng xuất không?")) return;
   try {
     await apiFetch("/api/auth/logout", { method: "POST" });
   } catch (e) {}
   clearSessionToken();
+  state.isDemoMode = false;
   state.user = null;
   state.friends = [];
   state.moments = [];
@@ -420,10 +443,11 @@ function renderCurrentUser() {
   const adminTickHtml = isAdmin
     ? ` <span class="admin-blue-tick" title="Quản trị viên đã xác minh (Admin Verified)"><i class="fa-solid fa-circle-check"></i></span> <span class="badge-admin-verified"><i class="fa-solid fa-shield-halved"></i> ADMIN</span>`
     : "";
+  const compactSidebarBadges = `${isAdmin ? ' <span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>' : ""} <i class="fa-solid fa-crown text-yellow" style="font-size:12px;" title="Locket Gold VIP"></i>`;
 
   el.sidebarAvatar.src = avatarUrl;
   el.mobileAvatar.src = avatarUrl;
-  el.sidebarName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
+  el.sidebarName.innerHTML = `${escapeHtml(fullName)}${compactSidebarBadges}`;
   el.sidebarUsername.textContent = `@${state.user.username || "me"}`;
 
   // VIP & Admin Avatar Glow
@@ -501,19 +525,40 @@ function renderFriendsFilter() {
   el.feedFilterFriend.value = currentVal;
 }
 
+function updatePhoneRecipientPill() {
+  const pill = document.getElementById("phone-recipient-pill");
+  if (!pill) return;
+  const checkedMode = document.querySelector("input[name='recipient-mode']:checked")?.value || "all";
+  if (checkedMode === "private") {
+    pill.innerHTML = `<i class="fa-solid fa-lock"></i> Chỉ mình tôi`;
+  } else if (checkedMode === "custom") {
+    const count = document.querySelectorAll("input[name='post-recipient']:checked").length;
+    pill.innerHTML = count > 0
+      ? `<i class="fa-solid fa-user-check"></i> Đã chọn ${count} bạn bè`
+      : `<i class="fa-solid fa-user-plus"></i> Chưa chọn bạn bè`;
+  } else {
+    pill.innerHTML = `<i class="fa-solid fa-user-group"></i> Tất cả bạn bè`;
+  }
+}
+
 function renderFriendsChecklist() {
   el.friendsChecklist.innerHTML = "";
   state.friends.forEach(f => {
-    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username;
+    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username || "Bạn bè";
+    const uname = (f.username || "").toLowerCase();
     const item = document.createElement("label");
     item.className = "friend-check-item";
+    item.dataset.search = `${name.toLowerCase()} ${uname}`;
     item.innerHTML = `
-      <input type="checkbox" name="post-recipient" value="${f.uid}">
+      <input type="checkbox" name="post-recipient" value="${escapeHtml(f.uid)}">
       <img src="${f.profile_picture_url || getDefaultAvatar(name)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">
-      <span style="font-size:13px;font-weight:600;">${name}</span>
+      <span style="font-size:13px;font-weight:600;">${escapeHtml(name)}</span>
     `;
+    const cb = item.querySelector("input[type='checkbox']");
+    if (cb) cb.addEventListener("change", updatePhoneRecipientPill);
     el.friendsChecklist.appendChild(item);
   });
+  updatePhoneRecipientPill();
 }
 
 function renderFriendsGrid(friendsList) {
@@ -529,7 +574,7 @@ function renderFriendsGrid(friendsList) {
 
   el.friendsGrid.innerHTML = "";
   friendsList.forEach(f => {
-    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username;
+    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username || "Bạn bè";
     const card = document.createElement("div");
     card.className = "friend-card";
     card.innerHTML = `
@@ -539,14 +584,42 @@ function renderFriendsGrid(friendsList) {
         <span class="friend-card-handle">@${escapeHtml(f.username || "")}</span>
       </div>
       <div class="friend-card-actions">
+        <button class="btn btn-secondary btn-sm btn-view-friend-feed" title="Xem khoảnh khắc bạn này">
+          <i class="fa-solid fa-camera text-yellow"></i>
+        </button>
         <button class="btn btn-secondary btn-sm btn-open-chat" data-uid="${escapeHtml(f.uid)}" data-name="${escapeHtml(name)}" title="Nhắn tin">
           <i class="fa-regular fa-comment-dots"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm text-danger btn-remove-friend" title="Hủy kết bạn">
+          <i class="fa-solid fa-user-minus"></i>
         </button>
       </div>
     `;
 
+    card.querySelector(".btn-view-friend-feed").addEventListener("click", () => {
+      el.feedFilterFriend.value = f.uid;
+      switchTab("feed");
+      loadFeed(true);
+    });
+
     card.querySelector(".btn-open-chat").addEventListener("click", () => {
       openChatWithFriend(f);
+    });
+
+    card.querySelector(".btn-remove-friend").addEventListener("click", async () => {
+      if (!confirm(`Bạn có chắc chắn muốn hủy kết bạn với ${name}?`)) return;
+      try {
+        const res = await apiFetch(`/api/friends/${encodeURIComponent(f.uid)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Đã hủy kết bạn với ${name}.`, "info");
+          await loadFriends();
+        } else {
+          showToast(data.error || "Không thể hủy kết bạn.", "error");
+        }
+      } catch (e) {
+        showToast("Lỗi kết nối: " + e.message, "error");
+      }
     });
 
     el.friendsGrid.appendChild(card);
@@ -572,7 +645,7 @@ el.friendSearchInput.addEventListener("input", e => {
 el.btnSendFriendRequest.addEventListener("click", async () => {
   const username = el.addFriendUsername.value.trim();
   if (!username) {
-    showToast("Vui lòng nhập username Locket", "error");
+    showToast("Vui lòng nhập @username hoặc link mời Locket", "error");
     return;
   }
 
@@ -585,8 +658,9 @@ el.btnSendFriendRequest.addEventListener("click", async () => {
     });
     const data = await res.json();
     if (res.ok) {
-      showToast(`Đã gửi lời mời kết bạn tới @${username}!`, "success");
+      showToast(`Đã gửi lời mời kết bạn tới ${username}!`, "success");
       el.addFriendUsername.value = "";
+      loadFriendRequests();
     } else {
       showToast(data.error || "Không thể gửi lời mời.", "error");
     }
@@ -603,16 +677,22 @@ async function loadFriendRequests() {
     const res = await apiFetch("/api/friends/requests");
     const data = await res.json();
     const incoming = data.incoming || [];
+    const outgoing = data.outgoing || [];
+
     if (incoming.length > 0) {
       el.friendRequestsBox.classList.remove("hidden");
       el.incomingRequestsList.innerHTML = "";
       incoming.forEach(req => {
         const uidStr = String(req.user_uid || req.uid || "");
+        const displayName = `${req.first_name || ""} ${req.last_name || ""}`.trim() || req.username || `UID: ${uidStr}`;
+        const avatarUrl = req.profile_picture_url || getDefaultAvatar(displayName);
         const item = document.createElement("div");
         item.className = "friend-card";
         item.innerHTML = `
+          <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="friend-card-avatar">
           <div class="friend-card-info">
-            <h4>Lời mời từ UID: ${escapeHtml(uidStr)}</h4>
+            <h4 class="friend-card-name">${escapeHtml(displayName)}</h4>
+            <span class="friend-card-handle">${req.username ? "@" + escapeHtml(req.username) : "UID: " + escapeHtml(uidStr)}</span>
           </div>
           <button class="btn btn-primary btn-sm btn-accept" data-uid="${escapeHtml(uidStr)}">
             <i class="fa-solid fa-check"></i> Chấp nhận
@@ -625,6 +705,33 @@ async function loadFriendRequests() {
       });
     } else {
       el.friendRequestsBox.classList.add("hidden");
+    }
+
+    const outgoingBox = document.getElementById("outgoing-requests-box");
+    const outgoingList = document.getElementById("outgoing-requests-list");
+    if (outgoingBox && outgoingList) {
+      if (outgoing.length > 0) {
+        outgoingBox.classList.remove("hidden");
+        outgoingList.innerHTML = "";
+        outgoing.forEach(req => {
+          const uidStr = String(req.user_uid || req.uid || "");
+          const displayName = `${req.first_name || ""} ${req.last_name || ""}`.trim() || req.username || `UID: ${uidStr}`;
+          const avatarUrl = req.profile_picture_url || getDefaultAvatar(displayName);
+          const item = document.createElement("div");
+          item.className = "friend-card";
+          item.innerHTML = `
+            <img src="${avatarUrl}" alt="${escapeHtml(displayName)}" class="friend-card-avatar">
+            <div class="friend-card-info">
+              <h4 class="friend-card-name">${escapeHtml(displayName)}</h4>
+              <span class="friend-card-handle">${req.username ? "@" + escapeHtml(req.username) : "UID: " + escapeHtml(uidStr)}</span>
+            </div>
+            <span class="badge badge-gray">⏳ Đang chờ xác nhận</span>
+          `;
+          outgoingList.appendChild(item);
+        });
+      } else {
+        outgoingBox.classList.add("hidden");
+      }
     }
   } catch (e) {}
 }
@@ -755,7 +862,9 @@ function renderFeed() {
   }
 
   // 3. Filter chip categories
-  if (state.activeFilterType === "favorites") {
+  if (state.activeFilterType === "mine") {
+    filtered = filtered.filter(m => m.author && m.author.is_me);
+  } else if (state.activeFilterType === "favorites") {
     filtered = filtered.filter(m => state.favorites.has(m.moment_uid));
   } else if (state.activeFilterType === "photo") {
     filtered = filtered.filter(m => !m.video_url);
@@ -900,13 +1009,34 @@ function renderFeed() {
       </div>
     `;
 
-    // Click to open lightbox
+    // Click to open lightbox (single click) or double-click for ❤️ burst
+    const mediaWrapper = card.querySelector(".moment-media-wrapper");
     const mediaEl = card.querySelector(".moment-media");
     if (mediaEl) {
       mediaEl.style.cursor = "pointer";
+      let clickTimer = null;
       mediaEl.addEventListener("click", () => {
-        openLightbox(m.image_url || m.video_url, isVideo);
+        if (clickTimer) clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          openLightbox(m.image_url || m.video_url, isVideo);
+        }, 230);
       });
+      if (mediaWrapper) {
+        mediaWrapper.addEventListener("dblclick", e => {
+          e.preventDefault();
+          if (clickTimer) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+          }
+          const burst = document.createElement("span");
+          burst.className = "dblclick-heart-burst";
+          burst.textContent = "❤️";
+          mediaWrapper.appendChild(burst);
+          setTimeout(() => burst.remove(), 900);
+          sendReaction(m.moment_uid, "❤️", null);
+        });
+      }
     }
 
     // Favorite toggle
@@ -1023,8 +1153,10 @@ async function sendReaction(momentUid, emoji, btnElement) {
   playPopSound();
   try {
     // Pop animation on button
-    btnElement.style.transform = "scale(1.5)";
-    setTimeout(() => { btnElement.style.transform = ""; }, 250);
+    if (btnElement && btnElement.style) {
+      btnElement.style.transform = "scale(1.5)";
+      setTimeout(() => { btnElement.style.transform = ""; }, 250);
+    }
 
     const res = await apiFetch("/api/moments/react", {
       method: "POST",
@@ -1117,11 +1249,13 @@ el.feedFilterFriend.addEventListener("change", () => {
 // ================= Post Studio & Upload ================= //
 
 // File input click & drag-drop
-el.btnChooseFile.addEventListener("click", () => el.momentFileInput.click());
+el.btnChooseFile.addEventListener("click", e => {
+  e.stopPropagation();
+  el.momentFileInput.click();
+});
 el.dropZone.addEventListener("click", e => {
-  if (e.target !== el.btnRemoveFile && !el.btnRemoveFile.contains(e.target)) {
-    el.momentFileInput.click();
-  }
+  if (e.target.closest("button")) return;
+  el.momentFileInput.click();
 });
 
 ["dragenter", "dragover"].forEach(eventName => {
@@ -1144,13 +1278,19 @@ el.momentFileInput.addEventListener("change", e => {
   if (e.target.files.length > 0) handleFileSelected(e.target.files[0]);
 });
 
-// ================= SMART LANDSCAPE PHOTO AUTO-FORMATTER ================= //
+// ================= SMART PHOTO AUTO-FORMATTER (1:1 WIDGET STUDIO) ================= //
 let formatState = {
   activeMode: "blur",
   rotation: 0,
   rawFile: null,
   isProcessing: false
 };
+
+function setFormatterActiveButton(mode) {
+  document.querySelectorAll(".format-mode-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+}
 
 async function generateFormattedPhoto(rawFile, mode = "blur", rotation = 0) {
   return new Promise((resolve) => {
@@ -1164,93 +1304,82 @@ async function generateFormattedPhoto(rawFile, mode = "blur", rotation = 0) {
         return resolve(rawFile);
       }
 
-      const canvas = document.createElement("canvas");
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
-
-      if (rotation % 180 !== 0) {
-        w = img.naturalHeight;
-        h = img.naturalWidth;
+      // Build rotated source canvas when rotation is applied so all modes respect rotation
+      let src = img;
+      let srcW = img.naturalWidth;
+      let srcH = img.naturalHeight;
+      if (rotation % 360 !== 0) {
+        const swap = rotation % 180 !== 0;
+        srcW = swap ? img.naturalHeight : img.naturalWidth;
+        srcH = swap ? img.naturalWidth : img.naturalHeight;
+        const rotCanvas = document.createElement("canvas");
+        rotCanvas.width = srcW;
+        rotCanvas.height = srcH;
+        const rCtx = rotCanvas.getContext("2d");
+        rCtx.translate(srcW / 2, srcH / 2);
+        rCtx.rotate((rotation * Math.PI) / 180);
+        rCtx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        src = rotCanvas;
       }
 
-      if (mode === "rotate") {
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-        ctx.restore();
+      const canvas = document.createElement("canvas");
+      if (mode === "original" || mode === "rotate") {
+        canvas.width = srcW;
+        canvas.height = srcH;
+        canvas.getContext("2d").drawImage(src, 0, 0);
       } else {
         // Standard 1:1 Square Locket Widget Format
-        const maxDim = Math.max(w, h);
+        const maxDim = Math.max(srcW, srcH);
         const targetSize = Math.min(Math.max(maxDim, 1080), 1920);
         canvas.width = targetSize;
         canvas.height = targetSize;
         const ctx = canvas.getContext("2d");
 
         if (mode === "crop") {
-          // Center Crop 1:1
-          const minDim = Math.min(w, h);
-          const sx = (w - minDim) / 2;
-          const sy = (h - minDim) / 2;
-
-          ctx.save();
-          if (rotation !== 0) {
-            const rotCanvas = document.createElement("canvas");
-            rotCanvas.width = w;
-            rotCanvas.height = h;
-            const rCtx = rotCanvas.getContext("2d");
-            rCtx.translate(w / 2, h / 2);
-            rCtx.rotate((rotation * Math.PI) / 180);
-            rCtx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-            ctx.drawImage(rotCanvas, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
-          } else {
-            ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
-          }
-          ctx.restore();
+          const minDim = Math.min(srcW, srcH);
+          const sx = (srcW - minDim) / 2;
+          const sy = (srcH - minDim) / 2;
+          ctx.drawImage(src, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
         } else if (mode === "black") {
-          // Solid Black Background
           ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, targetSize, targetSize);
-
-          const scale = Math.min(targetSize / w, targetSize / h);
-          const fw = w * scale;
-          const fh = h * scale;
-          const fx = (targetSize - fw) / 2;
-          const fy = (targetSize - fh) / 2;
-
+          const scale = Math.min(targetSize / srcW, targetSize / srcH);
+          const fw = srcW * scale;
+          const fh = srcH * scale;
+          ctx.drawImage(src, (targetSize - fw) / 2, (targetSize - fh) / 2, fw, fh);
+        } else if (mode === "white") {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, targetSize, targetSize);
+          const scale = Math.min(targetSize / srcW, targetSize / srcH) * 0.92;
+          const fw = srcW * scale;
+          const fh = srcH * scale;
           ctx.save();
-          ctx.drawImage(img, fx, fy, fw, fh);
+          ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
+          ctx.shadowBlur = 24;
+          ctx.shadowOffsetY = 6;
+          ctx.drawImage(src, (targetSize - fw) / 2, (targetSize - fh) / 2, fw, fh);
           ctx.restore();
         } else {
-          // Mode: "blur" (Default - Aesthetic Blurred Backdrop + Full Foreground)
-          // 1. Blurred cover background
+          // Mode: "blur" (Default - Aesthetic Blurred Backdrop + Full Uncropped Foreground)
           ctx.save();
           ctx.filter = "blur(32px) brightness(0.65)";
-          const bgScale = Math.max(targetSize / img.naturalWidth, targetSize / img.naturalHeight) * 1.12;
-          const bgW = img.naturalWidth * bgScale;
-          const bgH = img.naturalHeight * bgScale;
-          ctx.drawImage(img, (targetSize - bgW) / 2, (targetSize - bgH) / 2, bgW, bgH);
+          const bgScale = Math.max(targetSize / srcW, targetSize / srcH) * 1.12;
+          const bgW = srcW * bgScale;
+          const bgH = srcH * bgScale;
+          ctx.drawImage(src, (targetSize - bgW) / 2, (targetSize - bgH) / 2, bgW, bgH);
           ctx.restore();
 
-          // 2. Subtle dark overlay
           ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
           ctx.fillRect(0, 0, targetSize, targetSize);
 
-          // 3. Full uncropped foreground
-          const scale = Math.min(targetSize / img.naturalWidth, targetSize / img.naturalHeight) * 0.96;
-          const fw = img.naturalWidth * scale;
-          const fh = img.naturalHeight * scale;
-          const fx = (targetSize - fw) / 2;
-          const fy = (targetSize - fh) / 2;
-
+          const scale = Math.min(targetSize / srcW, targetSize / srcH) * 0.96;
+          const fw = srcW * scale;
+          const fh = srcH * scale;
           ctx.save();
           ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
           ctx.shadowBlur = 28;
           ctx.shadowOffsetY = 10;
-          ctx.drawImage(img, fx, fy, fw, fh);
+          ctx.drawImage(src, (targetSize - fw) / 2, (targetSize - fh) / 2, fw, fh);
           ctx.restore();
         }
       }
@@ -1272,10 +1401,9 @@ async function generateFormattedPhoto(rawFile, mode = "blur", rotation = 0) {
 function initLandscapeFormatter() {
   document.querySelectorAll(".format-mode-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (!formatState.rawFile) return;
+      if (!formatState.rawFile || formatState.isProcessing) return;
+      formatState.isProcessing = true;
       playPopSound();
-      document.querySelectorAll(".format-mode-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
       const mode = btn.dataset.mode;
 
       if (mode === "rotate") {
@@ -1283,21 +1411,28 @@ function initLandscapeFormatter() {
       } else {
         formatState.activeMode = mode;
       }
+      setFormatterActiveButton(formatState.activeMode);
 
       showToast("Đang định dạng lại ảnh...", "info");
-      const formatted = await generateFormattedPhoto(
-        formatState.rawFile,
-        mode === "rotate" ? "rotate" : formatState.activeMode,
-        formatState.rotation
-      );
+      try {
+        const formatted = await generateFormattedPhoto(
+          formatState.rawFile,
+          formatState.activeMode,
+          formatState.rotation
+        );
 
-      if (formatted) {
-        state.selectedFile = formatted;
-        el.previewImage.src = URL.createObjectURL(formatted);
-        el.fileName.textContent = `${formatState.rawFile.name} [${mode.toUpperCase()}]`;
-        el.fileSize.textContent = `${(formatted.size / (1024 * 1024)).toFixed(2)} MB`;
-        updateLiveOverlay();
-        showToast("Đã áp dụng định dạng ảnh mới!", "success");
+        if (formatted) {
+          state.selectedFile = formatted;
+          el.previewImage.classList.toggle("fit-contain", formatState.activeMode === "original");
+          el.previewImage.src = URL.createObjectURL(formatted);
+          el.fileName.textContent = `${formatState.rawFile.name} [${formatState.activeMode.toUpperCase()}${formatState.rotation ? ` · ${formatState.rotation}°` : ""}]`;
+          el.fileSize.textContent = `${(formatted.size / (1024 * 1024)).toFixed(2)} MB`;
+          updateLiveOverlay();
+          if (typeof window.syncDoodleCanvasSize === "function") setTimeout(window.syncDoodleCanvasSize, 40);
+          showToast("Đã áp dụng định dạng ảnh mới!", "success");
+        }
+      } finally {
+        formatState.isProcessing = false;
       }
     });
   });
@@ -1329,35 +1464,47 @@ function handleFileSelected(file) {
   if (isVideo) {
     if (formatterBox) formatterBox.classList.add("hidden");
     el.previewImage.classList.add("hidden");
+    el.previewImage.classList.remove("fit-contain");
     el.previewVideo.src = fileUrl;
     el.previewVideo.classList.remove("hidden");
     el.previewVideo.play().catch(() => {});
   } else {
     el.previewVideo.classList.add("hidden");
     el.previewVideo.pause();
+    el.previewImage.classList.remove("fit-contain");
     el.previewImage.src = fileUrl;
     el.previewImage.classList.remove("hidden");
 
-    // Detect landscape image (PC screenshot, wide photo)
     const testImg = new Image();
     testImg.src = fileUrl;
     testImg.onload = async () => {
-      const isLandscape = testImg.naturalWidth > testImg.naturalHeight * 1.15;
-      if (isLandscape) {
-        if (formatterBox) formatterBox.classList.remove("hidden");
-        if (dimInfo) {
-          dimInfo.textContent = `${testImg.naturalWidth}x${testImg.naturalHeight} (${(testImg.naturalWidth / testImg.naturalHeight).toFixed(2)}:1)`;
-        }
-        // Auto-apply blur format by default!
+      const w = testImg.naturalWidth;
+      const h = testImg.naturalHeight;
+      const ratio = h ? (w / h).toFixed(2) : "1.00";
+      if (formatterBox) formatterBox.classList.remove("hidden");
+      if (dimInfo) {
+        dimInfo.textContent = `${w} × ${h} (${ratio}:1)`;
+      }
+
+      const needsSquareFit = w > h * 1.12 || h > w * 1.18;
+      if (needsSquareFit) {
+        formatState.activeMode = "blur";
+        setFormatterActiveButton("blur");
         const formatted = await generateFormattedPhoto(file, "blur", 0);
         if (formatted) {
           state.selectedFile = formatted;
           el.previewImage.src = URL.createObjectURL(formatted);
           el.fileName.textContent = `${file.name} (Đã căn chuẩn 1:1)`;
-          showToast("✨ Đã tự động căn chỉnh ảnh ngang chuẩn Widget Locket (giữ nguyên 100% nội dung)!", "success");
+          el.fileSize.textContent = `${(formatted.size / (1024 * 1024)).toFixed(2)} MB`;
+          showToast("✨ Đã tự động căn chỉnh ảnh chuẩn Widget Locket 1:1 (giữ 100% nội dung)!", "success");
         }
       } else {
-        if (formatterBox) formatterBox.classList.add("hidden");
+        formatState.activeMode = "original";
+        setFormatterActiveButton("original");
+      }
+
+      if (typeof window.syncDoodleCanvasSize === "function") {
+        setTimeout(window.syncDoodleCanvasSize, 40);
       }
     };
   }
@@ -1381,12 +1528,20 @@ function resetFileSelection() {
   if (formatterBox) formatterBox.classList.add("hidden");
   formatState.rawFile = null;
   formatState.rotation = 0;
+  formatState.activeMode = "blur";
+  setFormatterActiveButton("blur");
 
   el.previewImage.classList.add("hidden");
+  el.previewImage.classList.remove("fit-contain");
   el.previewImage.src = "";
   el.previewVideo.classList.add("hidden");
   el.previewVideo.src = "";
   el.previewPlaceholder.classList.remove("hidden");
+
+  // Reset filter & frame state
+  if (typeof resetStudioEffects === "function") {
+    resetStudioEffects();
+  }
   if (typeof resetDoodleStudio === "function") {
     resetDoodleStudio();
   }
@@ -1457,16 +1612,50 @@ el.toggleCustomStyle.addEventListener("change", e => {
   inp.addEventListener("input", updateLiveOverlay);
 });
 
-// Recipients radios
+// Recipients radios & helper toolbar
+const checklistTools = document.getElementById("friends-checklist-tools");
 el.recipientRadios.forEach(radio => {
   radio.addEventListener("change", () => {
-    if (radio.value === "custom" && radio.checked) {
-      el.friendsChecklist.classList.remove("hidden");
-    } else {
-      el.friendsChecklist.classList.add("hidden");
-    }
+    const showCustom = radio.value === "custom" && radio.checked;
+    el.friendsChecklist.classList.toggle("hidden", !showCustom);
+    if (checklistTools) checklistTools.classList.toggle("hidden", !showCustom);
+    updatePhoneRecipientPill();
   });
 });
+
+const recipientSearchInp = document.getElementById("recipient-search-input");
+if (recipientSearchInp) {
+  recipientSearchInp.addEventListener("input", () => {
+    const q = recipientSearchInp.value.trim().toLowerCase();
+    el.friendsChecklist.querySelectorAll(".friend-check-item").forEach(item => {
+      const hay = item.dataset.search || "";
+      item.style.display = !q || hay.includes(q) ? "flex" : "none";
+    });
+  });
+}
+
+const btnSelectAllRecip = document.getElementById("btn-select-all-recipients");
+if (btnSelectAllRecip) {
+  btnSelectAllRecip.addEventListener("click", () => {
+    el.friendsChecklist.querySelectorAll(".friend-check-item").forEach(item => {
+      if (item.style.display !== "none") {
+        const cb = item.querySelector("input[name='post-recipient']");
+        if (cb) cb.checked = true;
+      }
+    });
+    updatePhoneRecipientPill();
+  });
+}
+
+const btnClearAllRecip = document.getElementById("btn-clear-all-recipients");
+if (btnClearAllRecip) {
+  btnClearAllRecip.addEventListener("click", () => {
+    el.friendsChecklist.querySelectorAll("input[name='post-recipient']").forEach(cb => {
+      cb.checked = false;
+    });
+    updatePhoneRecipientPill();
+  });
+}
 
 // POST MOMENT SUBMIT
 el.btnPostMoment.addEventListener("click", async () => {
@@ -1474,9 +1663,32 @@ el.btnPostMoment.addEventListener("click", async () => {
     showToast("Vui lòng chọn ảnh hoặc video trước khi đăng!", "error");
     return;
   }
+  if (!getSessionToken()) {
+    el.authScreen.classList.remove("hidden");
+    showToast("Vui lòng đăng nhập tài khoản Locket để đăng khoảnh khắc!", "info");
+    return;
+  }
+
+  // Validate Recipients before processing upload
+  const mode = document.querySelector("input[name='recipient-mode']:checked")?.value || "all";
+  let selectedRecipientUids = [];
+  if (mode === "custom") {
+    selectedRecipientUids = Array.from(document.querySelectorAll("input[name='post-recipient']:checked")).map(cb => cb.value);
+    if (selectedRecipientUids.length === 0) {
+      showToast("Vui lòng chọn ít nhất 1 bạn bè hoặc chuyển về 'Tất cả bạn bè'!", "error");
+      return;
+    }
+  }
 
   let fileToUpload = state.selectedFile;
-  if (typeof getMergedDoodleFile === "function") {
+  if (typeof getProcessedUploadFile === "function") {
+    try {
+      const processed = await getProcessedUploadFile();
+      if (processed) fileToUpload = processed;
+    } catch (e) {
+      console.warn("Studio effect merge error:", e);
+    }
+  } else if (typeof getMergedDoodleFile === "function") {
     try {
       const merged = await getMergedDoodleFile();
       if (merged) fileToUpload = merged;
@@ -1487,6 +1699,7 @@ el.btnPostMoment.addEventListener("click", async () => {
 
   const formData = new FormData();
   formData.append("file", fileToUpload);
+  formData.append("skipAutoFormat", formatState.activeMode === "original" ? "true" : "false");
 
   let finalCaption = el.momentCaption.value.trim();
   const toggleMusic = document.getElementById("toggle-music-sticker");
@@ -1515,13 +1728,11 @@ el.btnPostMoment.addEventListener("click", async () => {
     formData.append("noteType", el.momentPresetSelect.value || "standard");
   }
 
-  // Recipients
-  const mode = document.querySelector("input[name='recipient-mode']:checked").value;
-  if (mode === "custom") {
-    const checked = Array.from(document.querySelectorAll("input[name='post-recipient']:checked")).map(cb => cb.value);
-    if (checked.length > 0) {
-      formData.append("recipients", JSON.stringify(checked));
-    }
+  // Recipients & Privacy
+  if (mode === "private") {
+    formData.append("isPrivate", "true");
+  } else if (mode === "custom" && selectedRecipientUids.length > 0) {
+    formData.append("recipients", JSON.stringify(selectedRecipientUids));
   }
 
   // Upload with progress
@@ -2232,19 +2443,224 @@ if (btnTheme) btnTheme.addEventListener("click", cycleTheme);
 if (btnMobileTheme) btnMobileTheme.addEventListener("click", cycleTheme);
 initTheme();
 
-// ================= PHOTO FILTERS & MUSIC STICKER IN STUDIO ================= //
+// ================= PHOTO FILTERS, FRAMES & MUSIC STICKER IN STUDIO ================= //
 let currentFilter = "normal";
+let currentFrame = "none";
+
+const FILTER_CLASSES = [
+  "filter-vintage",
+  "filter-cyberpunk",
+  "filter-bw",
+  "filter-sunset",
+  "filter-cold",
+  "filter-gold-luxury",
+  "filter-emerald",
+  "filter-peach",
+  "filter-kodak"
+];
+
+const FILTER_CANVAS_MAP = {
+  normal: "none",
+  "gold-luxury": "sepia(0.35) saturate(1.8) brightness(1.05) contrast(1.15) hue-rotate(-10deg)",
+  emerald: "saturate(1.5) contrast(1.1) hue-rotate(65deg)",
+  vintage: "sepia(0.35) contrast(1.15) brightness(0.95) saturate(1.2)",
+  cyberpunk: "contrast(1.3) saturate(1.6) hue-rotate(-15deg)",
+  bw: "grayscale(1) contrast(1.35) brightness(0.95)",
+  sunset: "sepia(0.25) saturate(1.5) hue-rotate(-20deg) brightness(1.05)",
+  cold: "saturate(1.1) hue-rotate(180deg) brightness(0.95) contrast(1.1)",
+  peach: "sepia(0.12) saturate(1.35) brightness(1.06) contrast(1.05) hue-rotate(-8deg)",
+  kodak: "sepia(0.22) contrast(1.18) saturate(1.28) brightness(1.02)"
+};
+
+function formatFrameTimestamp() {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mi = String(now.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm} · ${hh}:${mi}`;
+}
+
+function updateLiveFrameOverlay() {
+  const ov = document.getElementById("preview-frame-overlay");
+  if (!ov) return;
+  ov.className = "preview-frame-overlay";
+  if (!currentFrame || currentFrame === "none") {
+    ov.classList.add("hidden");
+    ov.removeAttribute("data-timestamp");
+    return;
+  }
+  ov.classList.add(`frame-${currentFrame}`);
+  ov.setAttribute("data-timestamp", formatFrameTimestamp());
+}
+
+function resetStudioEffects() {
+  currentFilter = "normal";
+  currentFrame = "none";
+  document.querySelectorAll(".filter-pill").forEach(p => {
+    p.classList.toggle("active", p.dataset.filter === "normal");
+  });
+  document.querySelectorAll(".frame-pill").forEach(p => {
+    p.classList.toggle("active", p.dataset.frame === "none");
+  });
+  const img = document.getElementById("preview-image");
+  const vid = document.getElementById("preview-video");
+  FILTER_CLASSES.forEach(c => {
+    if (img) img.classList.remove(c);
+    if (vid) vid.classList.remove(c);
+  });
+  updateLiveFrameOverlay();
+}
+
+function drawFrameOnCanvas(ctx, w, h, frameType) {
+  if (!frameType || frameType === "none") return;
+  const ts = formatFrameTimestamp();
+
+  ctx.save();
+  if (frameType === "vip-gold") {
+    const borderW = Math.max(18, Math.round(w * 0.025));
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, "#ffd700");
+    grad.addColorStop(0.5, "#fff1a8");
+    grad.addColorStop(1, "#ff9500");
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = borderW * 2;
+    ctx.strokeRect(0, 0, w, h);
+
+    // Top badge pill
+    const pillW = Math.round(w * 0.28);
+    const pillH = Math.round(h * 0.045);
+    const px = (w - pillW) / 2;
+    const py = borderW + 10;
+    ctx.fillStyle = "#ffd700";
+    if (typeof drawRoundRect === "function") {
+      drawRoundRect(ctx, px, py, pillW, pillH, pillH / 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(px, py, pillW, pillH);
+    }
+    ctx.fillStyle = "#000000";
+    ctx.font = `900 ${Math.max(16, Math.round(w * 0.024))}px -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("✦ LOCKET VIP ✦", w / 2, py + pillH / 2);
+  } else if (frameType === "camcorder") {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = Math.max(4, Math.round(w * 0.005));
+    ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+
+    const fontSize = Math.max(24, Math.round(w * 0.036));
+    ctx.font = `900 ${fontSize}px "Courier New", monospace`;
+    ctx.shadowColor = "rgba(0,0,0,0.9)";
+    ctx.shadowBlur = 10;
+
+    ctx.fillStyle = "#ff3b30";
+    ctx.textAlign = "left";
+    ctx.fillText("● REC", Math.round(w * 0.045), Math.round(h * 0.075));
+
+    ctx.fillStyle = "#ff9500";
+    ctx.textAlign = "right";
+    ctx.fillText(ts, w - Math.round(w * 0.045), h - Math.round(h * 0.055));
+  } else if (frameType === "polaroid-mini") {
+    const pad = Math.round(w * 0.045);
+    const bottomPad = Math.round(h * 0.11);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, pad);
+    ctx.fillRect(0, h - bottomPad, w, bottomPad);
+    ctx.fillRect(0, 0, pad, h);
+    ctx.fillRect(w - pad, 0, pad, h);
+
+    ctx.fillStyle = "#181a1f";
+    ctx.font = `800 ${Math.max(22, Math.round(w * 0.032))}px -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`Locket · ${ts}`, w / 2, h - bottomPad / 2);
+  } else if (frameType === "timestamp") {
+    const badgeW = Math.round(w * 0.28);
+    const badgeH = Math.round(h * 0.052);
+    const bx = w - badgeW - Math.round(w * 0.035);
+    const by = Math.round(h * 0.035);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    if (typeof drawRoundRect === "function") {
+      drawRoundRect(ctx, bx, by, badgeW, badgeH, badgeH / 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.7)";
+      ctx.lineWidth = Math.max(2, Math.round(w * 0.003));
+      ctx.stroke();
+    } else {
+      ctx.fillRect(bx, by, badgeW, badgeH);
+    }
+    ctx.fillStyle = "#ffd700";
+    ctx.font = `700 ${Math.max(18, Math.round(w * 0.026))}px -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ts, bx + badgeW / 2, by + badgeH / 2);
+  }
+  ctx.restore();
+}
+
+async function getProcessedUploadFile() {
+  if (!state.selectedFile || state.selectedFileType === "video") {
+    return state.selectedFile;
+  }
+  const toggleDoodle = document.getElementById("toggle-doodle-mode");
+  const doodleCanvas = document.getElementById("doodle-canvas");
+  const hasDoodle = Boolean(toggleDoodle && toggleDoodle.checked && typeof doodleState !== "undefined" && doodleState.hasDrawn && doodleCanvas);
+  const hasFilter = currentFilter && currentFilter !== "normal";
+  const hasFrame = currentFrame && currentFrame !== "none";
+
+  if (!hasDoodle && !hasFilter && !hasFrame) {
+    return state.selectedFile;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(state.selectedFile);
+    img.src = objectUrl;
+    img.onload = () => {
+      const w = img.naturalWidth || 1080;
+      const h = img.naturalHeight || 1080;
+      const offscreen = document.createElement("canvas");
+      offscreen.width = w;
+      offscreen.height = h;
+      const offCtx = offscreen.getContext("2d");
+
+      offCtx.save();
+      offCtx.filter = FILTER_CANVAS_MAP[currentFilter] || "none";
+      offCtx.drawImage(img, 0, 0, w, h);
+      offCtx.restore();
+
+      if (hasFrame) {
+        drawFrameOnCanvas(offCtx, w, h, currentFrame);
+      }
+      if (hasDoodle) {
+        offCtx.drawImage(doodleCanvas, 0, 0, w, h);
+      }
+
+      URL.revokeObjectURL(objectUrl);
+      offscreen.toBlob((blob) => {
+        if (!blob) return resolve(state.selectedFile);
+        const fileName = state.selectedFile.name.replace(/\.[^/.]+$/, "") + "_studio.jpg";
+        resolve(new File([blob], fileName, { type: "image/jpeg" }));
+      }, "image/jpeg", 0.95);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(state.selectedFile);
+    };
+  });
+}
 
 document.querySelectorAll(".filter-pill").forEach(btn => {
   btn.addEventListener("click", () => {
     playPopSound();
     document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
     btn.classList.add("active");
-    currentFilter = btn.dataset.filter;
+    currentFilter = btn.dataset.filter || "normal";
 
     const img = document.getElementById("preview-image");
     const vid = document.getElementById("preview-video");
-    ["filter-vintage", "filter-cyberpunk", "filter-bw", "filter-sunset", "filter-cold", "filter-gold-luxury", "filter-emerald"].forEach(c => {
+    FILTER_CLASSES.forEach(c => {
       if (img) img.classList.remove(c);
       if (vid) vid.classList.remove(c);
     });
@@ -2254,6 +2670,16 @@ document.querySelectorAll(".filter-pill").forEach(btn => {
       if (img) img.classList.add(cls);
       if (vid) vid.classList.add(cls);
     }
+  });
+});
+
+document.querySelectorAll(".frame-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    playPopSound();
+    document.querySelectorAll(".frame-pill").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    currentFrame = btn.dataset.frame || "none";
+    updateLiveFrameOverlay();
   });
 });
 
@@ -3359,12 +3785,15 @@ function initDoodleStudio() {
     const parent = canvas.parentElement;
     if (parent) {
       const rect = parent.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        canvas.width = rect.width;
-        canvas.height = rect.height;
+      const targetW = Math.round(rect.width);
+      const targetH = Math.round(rect.height);
+      if (targetW > 0 && targetH > 0 && (canvas.width !== targetW || canvas.height !== targetH)) {
+        canvas.width = targetW;
+        canvas.height = targetH;
       }
     }
   }
+  window.syncDoodleCanvasSize = syncCanvasSize;
 
   if (toggleDoodle) {
     toggleDoodle.addEventListener("change", (e) => {
@@ -4227,6 +4656,367 @@ function initLocketVipSuite() {
   }
 }
 
+// ================= 7. CLIPBOARD PASTE, SMART CAPTION, COLLAGE & MOSAIC ================= //
+function initClipboardPaste() {
+  document.addEventListener("paste", (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith("image/")) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) return;
+        const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+        const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: blob.type });
+        if (state.activeTab !== "post") switchTab("post");
+        handleFileSelected(file);
+        showToast("📋 Đã dán ảnh chụp màn hình và tự động căn chuẩn 1:1!", "success");
+        return;
+      }
+    }
+  });
+
+  const btnPaste = document.getElementById("btn-paste-clipboard");
+  if (btnPaste) {
+    btnPaste.addEventListener("click", async () => {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        showToast("Hãy bấm tổ hợp phím Ctrl + V để dán ảnh từ bộ nhớ tạm!", "info");
+        return;
+      }
+      try {
+        const items = await navigator.clipboard.read();
+        for (const clipItem of items) {
+          const imgType = clipItem.types.find(t => t.startsWith("image/"));
+          if (imgType) {
+            const blob = await clipItem.getType(imgType);
+            const ext = (imgType.split("/")[1] || "png").replace("jpeg", "jpg");
+            const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: imgType });
+            handleFileSelected(file);
+            showToast("📋 Đã dán ảnh từ Clipboard thành công!", "success");
+            return;
+          }
+        }
+        showToast("Không thấy ảnh trong bộ nhớ tạm. Hãy chụp màn hình rồi nhấn Ctrl + V nhé!", "info");
+      } catch (e) {
+        showToast("Hãy bấm tổ hợp phím Ctrl + V để dán ảnh trực tiếp!", "info");
+      }
+    });
+  }
+}
+
+function initSmartCaptionTools() {
+  const timeEl = document.getElementById("phone-live-time");
+  const updatePhoneClock = () => {
+    if (!timeEl) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    timeEl.textContent = `${hh}:${mm}`;
+  };
+  updatePhoneClock();
+  setInterval(updatePhoneClock, 30000);
+
+  const appendCaption = (snippet) => {
+    if (!el.momentCaption) return;
+    const cur = el.momentCaption.value.trim();
+    const combined = cur ? `${cur} · ${snippet}` : snippet;
+    el.momentCaption.value = combined.slice(0, 150);
+    el.momentCaption.dispatchEvent(new Event("input"));
+  };
+
+  const btnTime = document.getElementById("btn-smart-time");
+  if (btnTime) {
+    btnTime.addEventListener("click", () => {
+      playPopSound();
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const dd = String(now.getDate()).padStart(2, "0");
+      const mo = String(now.getMonth() + 1).padStart(2, "0");
+      appendCaption(`🕒 ${hh}:${mm} · ${dd}/${mo}`);
+    });
+  }
+
+  const btnWeather = document.getElementById("btn-smart-weather");
+  if (btnWeather) {
+    btnWeather.addEventListener("click", async () => {
+      playPopSound();
+      const origHtml = btnWeather.innerHTML;
+      btnWeather.disabled = true;
+      btnWeather.textContent = "⏳ Đang đo...";
+
+      let lat = 21.0285;
+      let lon = 105.8542;
+      try {
+        const pos = await new Promise((res, rej) => {
+          if (!navigator.geolocation) return rej(new Error("no geo"));
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 3000 });
+        });
+        if (pos && pos.coords) {
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        }
+      } catch (e) {}
+
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        const data = await res.json();
+        const cw = data && data.current_weather;
+        if (cw && typeof cw.temperature === "number") {
+          const code = Number(cw.weathercode);
+          let icon = "🌤️";
+          let label = "Trời đẹp";
+          if (code === 0) { icon = "☀️"; label = "Trời quang"; }
+          else if (code <= 3) { icon = "⛅"; label = "Có mây"; }
+          else if (code >= 51 && code <= 67) { icon = "🌧️"; label = "Đang mưa"; }
+          else if (code >= 80 && code <= 99) { icon = "⛈️"; label = "Mưa dông"; }
+          appendCaption(`${icon} ${Math.round(cw.temperature)}°C · ${label}`);
+        } else {
+          appendCaption("🌤️ 26°C · Trời dịu mát ✨");
+        }
+      } catch (e) {
+        appendCaption("🌤️ 26°C · Trời đẹp ✨");
+      } finally {
+        btnWeather.disabled = false;
+        btnWeather.innerHTML = origHtml;
+      }
+    });
+  }
+
+  const btnBattery = document.getElementById("btn-smart-battery");
+  if (btnBattery) {
+    btnBattery.addEventListener("click", async () => {
+      playPopSound();
+      try {
+        if (navigator.getBattery) {
+          const bat = await navigator.getBattery();
+          const pct = Math.round((bat.level || 0.99) * 100);
+          appendCaption(`🔋 ${pct}% pin${bat.charging ? " ⚡ đang sạc" : ""}`);
+          return;
+        }
+      } catch (e) {}
+      appendCaption("🔋 99% Full Power ⚡");
+    });
+  }
+
+  const btnLocation = document.getElementById("btn-smart-location");
+  if (btnLocation) {
+    btnLocation.addEventListener("click", () => {
+      playPopSound();
+      const place = prompt("Nhập tên địa điểm check-in (ví dụ: Hà Nội, Highlands, Trường...):", "Quán quen ☕");
+      if (place && place.trim()) {
+        appendCaption(`📍 ${place.trim()}`);
+      }
+    });
+  }
+
+  const btnRandom = document.getElementById("btn-smart-random");
+  if (btnRandom) {
+    const QUOTES = [
+      "Hôm nay trời nhẹ mây cao ☁️",
+      "Chụp vội một chiếc khoảnh khắc ✨",
+      "Ai rảnh đi cafe hong ☕",
+      "Deadline dí sát nút rồi 😭",
+      "Góc chill quen thuộc 🎧",
+      "Đừng nhìn ảnh này mà đói nha 🍜",
+      "Một ngày năng suất 💪",
+      "Mood hôm nay: 100 điểm 👑",
+      "Trốn việc đi hít thở gió trời 🌿",
+      "Chúc cả nhà một ngày tốt lành 💛",
+      "Vibe cuối ngày thật dịu 🌅",
+      "Cười một cái cho đời tươi 📸",
+      "Bắt gặp khoảnh khắc xịn sò ⚡",
+      "Bình yên đôi khi chỉ thế thôi 🫶",
+      "Nạp năng lượng ngay thôi 🔥"
+    ];
+    let randIdx = Math.floor(Math.random() * QUOTES.length);
+    btnRandom.addEventListener("click", () => {
+      playPopSound();
+      if (!el.momentCaption) return;
+      el.momentCaption.value = QUOTES[randIdx % QUOTES.length];
+      randIdx++;
+      el.momentCaption.dispatchEvent(new Event("input"));
+    });
+  }
+}
+
+function initCollageStudio() {
+  const modal = document.getElementById("collage-modal");
+  const btnOpen = document.getElementById("btn-open-collage");
+  const btnClose = document.getElementById("btn-close-collage-modal");
+  const btnChoose = document.getElementById("btn-choose-collage-files");
+  const fileInput = document.getElementById("collage-files-input");
+  const btnApply = document.getElementById("btn-apply-collage");
+  const canvas = document.getElementById("collage-canvas");
+  if (!modal || !canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  let collageImages = [];
+  let layout = "2h";
+  let bgColor = "#0b0c0e";
+
+  function drawImageCover(img, x, y, w, h, radius = 22) {
+    ctx.save();
+    if (typeof drawRoundRect === "function") {
+      drawRoundRect(ctx, x, y, w, h, radius);
+      ctx.clip();
+    } else {
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
+    }
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    ctx.restore();
+  }
+
+  function renderCollageCanvas() {
+    const W = canvas.width;
+    const H = canvas.height;
+    const gap = 18;
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+
+    if (collageImages.length === 0) {
+      ctx.fillStyle = bgColor === "#ffffff" ? "#555" : "#8b949e";
+      ctx.font = "bold 34px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Chọn 2 - 4 ảnh để ghép ✨", W / 2, H / 2);
+      if (btnApply) btnApply.disabled = true;
+      return;
+    }
+
+    if (btnApply) btnApply.disabled = false;
+    const imgs = collageImages;
+
+    if (layout === "2h") {
+      const cellW = (W - gap * 3) / 2;
+      const cellH = H - gap * 2;
+      drawImageCover(imgs[0], gap, gap, cellW, cellH);
+      drawImageCover(imgs[1 % imgs.length], gap * 2 + cellW, gap, cellW, cellH);
+    } else if (layout === "2v") {
+      const cellW = W - gap * 2;
+      const cellH = (H - gap * 3) / 2;
+      drawImageCover(imgs[0], gap, gap, cellW, cellH);
+      drawImageCover(imgs[1 % imgs.length], gap, gap * 2 + cellH, cellW, cellH);
+    } else if (layout === "3split") {
+      const leftW = (W - gap * 3) * 0.54;
+      const rightW = W - gap * 3 - leftW;
+      const rightH = (H - gap * 3) / 2;
+      drawImageCover(imgs[0], gap, gap, leftW, H - gap * 2);
+      drawImageCover(imgs[1 % imgs.length], gap * 2 + leftW, gap, rightW, rightH);
+      drawImageCover(imgs[2 % imgs.length], gap * 2 + leftW, gap * 2 + rightH, rightW, rightH);
+    } else {
+      const cell = (W - gap * 3) / 2;
+      drawImageCover(imgs[0], gap, gap, cell, cell);
+      drawImageCover(imgs[1 % imgs.length], gap * 2 + cell, gap, cell, cell);
+      drawImageCover(imgs[2 % imgs.length], gap, gap * 2 + cell, cell, cell);
+      drawImageCover(imgs[3 % imgs.length], gap * 2 + cell, gap * 2 + cell, cell, cell);
+    }
+  }
+
+  renderCollageCanvas();
+
+  if (btnOpen) {
+    btnOpen.addEventListener("click", (e) => {
+      e.stopPropagation();
+      modal.classList.remove("hidden");
+      renderCollageCanvas();
+    });
+  }
+  if (btnClose) {
+    btnClose.addEventListener("click", () => modal.classList.add("hidden"));
+  }
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+  });
+
+  if (btnChoose && fileInput) {
+    btnChoose.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files || []).slice(0, 4);
+      if (files.length === 0) return;
+
+      const loaded = await Promise.all(files.map(file => new Promise((res) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.src = url;
+        img.onload = () => { URL.revokeObjectURL(url); res(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); res(null); };
+      })));
+
+      collageImages = loaded.filter(Boolean);
+      if (collageImages.length === 3) layout = "3split";
+      else if (collageImages.length === 4) layout = "4grid";
+      else layout = "2h";
+
+      document.querySelectorAll(".collage-opt-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.layout === layout);
+      });
+      renderCollageCanvas();
+    });
+  }
+
+  document.querySelectorAll(".collage-opt-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      playPopSound();
+      document.querySelectorAll(".collage-opt-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      layout = btn.dataset.layout || "2h";
+      renderCollageCanvas();
+    });
+  });
+
+  document.querySelectorAll(".collage-bg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      playPopSound();
+      document.querySelectorAll(".collage-bg-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      bgColor = btn.dataset.bg || "#0b0c0e";
+      renderCollageCanvas();
+    });
+  });
+
+  if (btnApply) {
+    btnApply.addEventListener("click", () => {
+      if (collageImages.length === 0) return;
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const collageFile = new File([blob], `locket-collage-${Date.now()}.jpg`, { type: "image/jpeg" });
+        modal.classList.add("hidden");
+        handleFileSelected(collageFile);
+        showToast("🖼️ Đã tạo ảnh ghép Locket 1:1 thành công!", "success");
+      }, "image/jpeg", 0.95);
+    });
+  }
+}
+
+function initFeedLayoutToggle() {
+  const btn = document.getElementById("btn-toggle-feed-layout");
+  const container = document.getElementById("feed-container");
+  if (!btn || !container) return;
+
+  const applyLayout = (isMosaic) => {
+    container.classList.toggle("compact-mosaic", isMosaic);
+    btn.innerHTML = isMosaic
+      ? `<i class="fa-solid fa-square"></i> <span>Thẻ lớn</span>`
+      : `<i class="fa-solid fa-grip"></i> <span>Lưới gọn</span>`;
+  };
+
+  const savedMosaic = localStorage.getItem("locket_feed_layout") === "mosaic";
+  applyLayout(savedMosaic);
+
+  btn.addEventListener("click", () => {
+    playPopSound();
+    const nextMosaic = !container.classList.contains("compact-mosaic");
+    localStorage.setItem("locket_feed_layout", nextMosaic ? "mosaic" : "cards");
+    applyLayout(nextMosaic);
+  });
+}
+
 // Attach all mega feature listeners
 initFeedSearchAndFilters();
 initPolaroidListeners();
@@ -4239,6 +5029,10 @@ initQRPassModal();
 initMemoriesBackup();
 initLocketVipSuite();
 initLandscapeFormatter();
+initClipboardPaste();
+initSmartCaptionTools();
+initCollageStudio();
+initFeedLayoutToggle();
 
 // Hook favorites and streak on load
 const origRenderCurrentUser = renderCurrentUser;

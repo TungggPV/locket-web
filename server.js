@@ -5,6 +5,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const multer = require("multer");
+const sharp = require("sharp");
 const { LocketClient, NoteType, DeviceProfile } = require("./");
 
 // Setup ffmpeg path for video processing
@@ -326,15 +327,49 @@ app.get("/api/friends/requests", requireAuth, async (req, res) => {
   }
 });
 
-// Send friend request by username
+// Send friend request by username or invite URL
 app.post("/api/friends/request", requireAuth, async (req, res) => {
   const client = req.locketClient;
   const { username } = req.body;
-  if (!username) {
-    return res.status(400).json({ error: "Username không được để trống." });
+  if (!username || !String(username).trim()) {
+    return res.status(400).json({ error: "Username hoặc link mời không được để trống." });
   }
+  const rawInput = String(username).trim();
   try {
-    const result = await client.friends.sendRequestByUsername(username.trim());
+    let result;
+    const inviteMatch = rawInput.match(/locket\.camera(?:\/|%2F)invites(?:\/|%2F)([a-zA-Z0-9]+)/i);
+    const camMatch = rawInput.match(/locket\.cam\/([a-zA-Z0-9._-]+)/i);
+
+    if (inviteMatch) {
+      const userData = await client.friends.fetchUserByInviteToken(inviteMatch[1]);
+      const uid = userData?.user?.uid || null;
+      if (!uid) throw new Error("Link mời Locket không hợp lệ hoặc đã hết hạn.");
+      result = await client.friends.sendRequest(uid);
+    } else if (camMatch) {
+      result = await client.friends.sendRequestByUsername(camMatch[1]);
+    } else if (/^https?:\/\//i.test(rawInput)) {
+      const parsed = new URL(rawInput);
+      const allowedHosts = new Set(["locket.cam", "www.locket.cam", "locket.camera", "www.locket.camera"]);
+      if (!allowedHosts.has(parsed.hostname.toLowerCase())) {
+        throw new Error("Chỉ chấp nhận liên kết chính thức từ locket.cam hoặc locket.camera.");
+      }
+      const pageRes = await fetch(rawInput, { redirect: "follow" });
+      const html = await pageRes.text();
+      const resolvedInvite =
+        (pageRes.url || "").match(/invites\/([a-zA-Z0-9]+)/i) ||
+        html.match(/locket\.camera(?:\/|%2F)invites(?:\/|%2F)([a-zA-Z0-9]+)/i);
+      if (resolvedInvite) {
+        const userData = await client.friends.fetchUserByInviteToken(resolvedInvite[1]);
+        const uid = userData?.user?.uid || null;
+        if (!uid) throw new Error("Không tìm thấy người dùng từ link mời Locket.");
+        result = await client.friends.sendRequest(uid);
+      } else {
+        throw new Error("Không nhận diện được link mời Locket hợp lệ.");
+      }
+    } else {
+      const cleanUsername = rawInput.replace(/^@+/, "");
+      result = await client.friends.sendRequestByUsername(cleanUsername);
+    }
     res.json({ success: true, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -350,6 +385,36 @@ app.post("/api/friends/accept", requireAuth, async (req, res) => {
   }
   try {
     const result = await client.friends.acceptRequest(userUid);
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Remove friend
+app.delete("/api/friends/:userUid", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  const { userUid } = req.params;
+  if (!userUid) {
+    return res.status(400).json({ error: "userUid không hợp lệ." });
+  }
+  try {
+    const result = await client.friends.remove(userUid);
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Block friend
+app.post("/api/friends/block", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  const { userUid } = req.body;
+  if (!userUid) {
+    return res.status(400).json({ error: "userUid không hợp lệ." });
+  }
+  try {
+    const result = await client.friends.block(userUid);
     res.json({ success: true, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -516,8 +581,11 @@ app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, re
       colors = null,
       textColor = null,
       recipients = null,
-      isPrivate = false
+      isPrivate = false,
+      skipAutoFormat = false
     } = req.body;
+
+    const shouldSkipAutoFormat = skipAutoFormat === true || skipAutoFormat === "true";
 
     let parsedColors = null;
     if (colors) {
@@ -533,6 +601,7 @@ app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, re
       caption: caption || "",
       noteType: noteType || NoteType.STANDARD,
       isPrivate: isPrivate === true || isPrivate === "true",
+      skipAutoFormat: shouldSkipAutoFormat,
       autoCompress: true,
       priority: "speed"
     };
@@ -549,8 +618,8 @@ app.post("/api/moments/post", requireAuth, upload.single("file"), async (req, re
     if (isVideo) {
       postOptions.video = filePath;
     } else {
-      // Auto-format landscape / PC screenshot images to 1:1 with blurred backdrop
-      if (filePath && fs.existsSync(filePath)) {
+      // Auto-format landscape / PC screenshot images to 1:1 with blurred backdrop unless user chose original
+      if (!shouldSkipAutoFormat && filePath && fs.existsSync(filePath)) {
         try {
           const meta = await sharp(filePath).metadata();
           if (meta.width && meta.height && meta.width > meta.height * 1.15) {

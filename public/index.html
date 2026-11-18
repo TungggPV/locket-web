@@ -25,12 +25,12 @@
 
       <form id="login-form" class="auth-form">
         <div class="form-group">
-          <label><i class="fa-regular fa-envelope"></i> Email Locket</label>
+          <label><i class="fa-regular fa-envelope"></i> <span>Email Locket</span></label>
           <input type="email" id="login-email" placeholder="example@email.com" required autocomplete="email">
         </div>
 
         <div class="form-group">
-          <label><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+          <label><i class="fa-solid fa-lock"></i> <span>Mật khẩu</span></label>
           <div class="password-wrapper">
             <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
             <button type="button" id="toggle-password" class="btn-icon"><i class="fa-regular fa-eye"></i></button>
@@ -49,6 +49,11 @@
         <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block">
           <span>Đăng nhập</span>
           <i class="fa-solid fa-arrow-right"></i>
+        </button>
+
+        <button type="button" id="btn-demo-preview" class="btn btn-secondary btn-block" style="margin-top:8px;">
+          <i class="fa-solid fa-wand-magic-sparkles text-yellow"></i>
+          <span>Xem trước Studio & Ghép ảnh</span>
         </button>
 
         <p class="auth-note">
@@ -191,12 +196,19 @@
                 <i class="fa-solid fa-mobile-screen text-yellow"></i>
                 <span>Widget iOS</span>
               </button>
+
+              <!-- Compact Mosaic View Toggle -->
+              <button id="btn-toggle-feed-layout" class="btn btn-secondary btn-sm" title="Đổi bố cục hiển thị (Thẻ chi tiết / Lưới thu gọn)">
+                <i class="fa-solid fa-grip"></i>
+                <span>Lưới gọn</span>
+              </button>
             </div>
           </div>
 
           <!-- Quick Filter Tags -->
           <div class="filter-chips-row">
             <button class="filter-chip active" data-filter="all">👥 Tất cả</button>
+            <button class="filter-chip" data-filter="mine">👤 Của tôi</button>
             <button class="filter-chip" data-filter="favorites">⭐ Yêu thích (<span id="fav-count">0</span>)</button>
             <button class="filter-chip" data-filter="photo">📸 Chỉ ảnh</button>
             <button class="filter-chip" data-filter="video">🎥 Chỉ video</button>
@@ -237,34 +249,57 @@
             <div class="phone-frame">
               <div class="phone-notch"></div>
               <div class="phone-screen" id="phone-screen">
-                <div class="preview-placeholder" id="preview-placeholder">
-                  <i class="fa-solid fa-cloud-arrow-up"></i>
-                  <span>Chọn ảnh hoặc video bên cạnh để xem trước</span>
-                </div>
-                <img id="preview-image" class="preview-media hidden" alt="Preview Image">
-                <canvas id="doodle-canvas" class="doodle-canvas hidden"></canvas>
-                <video id="preview-video" class="preview-media hidden" playsinline controls loop></video>
-
-                <!-- Dynamic Overlay Live Preview -->
-                <div id="preview-overlay" class="locket-overlay hidden">
-                  <span id="overlay-icon" class="overlay-icon"></span>
-                  <span id="overlay-text" class="overlay-text">Caption ở đây</span>
+                <div class="phone-top-bar">
+                  <span class="phone-time" id="phone-live-time">09:41</span>
+                  <span class="phone-recipient-pill" id="phone-recipient-pill">
+                    <i class="fa-solid fa-user-group"></i> Tất cả bạn bè
+                  </span>
+                  <span class="phone-status-icons">
+                    <i class="fa-solid fa-signal"></i>
+                    <i class="fa-solid fa-wifi"></i>
+                    <i class="fa-solid fa-battery-full"></i>
+                  </span>
                 </div>
 
-                <!-- Music Sticker Live Preview -->
-                <div id="preview-music-badge" class="music-sticker-badge hidden">
-                  <span class="vinyl-disc">💿</span>
-                  <div class="music-info-text">
-                    <span id="music-preview-song" class="music-song">Tên bài hát</span>
-                    <span id="music-preview-artist" class="music-artist">Nghệ sĩ</span>
+                <!-- Authentic 1:1 Locket Square Widget Stage -->
+                <div class="locket-square-stage" id="locket-square-stage">
+                  <div class="preview-placeholder" id="preview-placeholder">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Chọn, kéo thả hoặc bấm <b>Ctrl + V</b> để dán ảnh</span>
                   </div>
-                  <div class="sound-waves">
-                    <span></span><span></span><span></span><span></span>
+                  <img id="preview-image" class="preview-media hidden" alt="Preview Image">
+                  <video id="preview-video" class="preview-media hidden" playsinline controls loop></video>
+                  <div id="preview-frame-overlay" class="preview-frame-overlay hidden"></div>
+                  <canvas id="doodle-canvas" class="doodle-canvas hidden"></canvas>
+
+                  <!-- Dynamic Overlay Live Preview -->
+                  <div id="preview-overlay" class="locket-overlay hidden">
+                    <span id="overlay-icon" class="overlay-icon"></span>
+                    <span id="overlay-text" class="overlay-text">Caption ở đây</span>
+                  </div>
+
+                  <!-- Music Sticker Live Preview -->
+                  <div id="preview-music-badge" class="music-sticker-badge hidden">
+                    <span class="vinyl-disc">💿</span>
+                    <div class="music-info-text">
+                      <span id="music-preview-song" class="music-song">Tên bài hát</span>
+                      <span id="music-preview-artist" class="music-artist">Nghệ sĩ</span>
+                    </div>
+                    <div class="sound-waves">
+                      <span></span><span></span><span></span><span></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="phone-bottom-bar">
+                  <span class="phone-fake-reply">Gửi tin nhắn...</span>
+                  <div class="phone-fake-emojis">
+                    <span>❤️</span><span>🔥</span><span>😍</span><span>✨</span>
                   </div>
                 </div>
               </div>
             </div>
-            <p class="preview-hint"><i class="fa-solid fa-eye"></i> Xem trước hiển thị thực tế trên widget Locket</p>
+            <p class="preview-hint"><i class="fa-solid fa-eye"></i> Xem trước khung vuông 1:1 thực tế trên Locket</p>
           </div>
 
           <!-- Right Column: Upload & Customize Controls -->
@@ -280,13 +315,19 @@
                     <i class="fa-solid fa-camera-retro"></i>
                   </div>
                   <h4>Kéo thả ảnh / video vào đây</h4>
-                  <p>Hỗ trợ JPG, PNG, WEBP, MP4, MOV (Lên đến 150MB)</p>
-                  <div class="upload-buttons-row" style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+                  <p>Hỗ trợ JPG, PNG, WEBP, MP4, MOV · Hoặc bấm Ctrl + V dán ảnh trực tiếp</p>
+                  <div class="upload-buttons-row" style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;">
                     <button type="button" class="btn btn-secondary btn-sm" id="btn-choose-file">
                       <i class="fa-solid fa-folder-open"></i> Chọn từ máy tính
                     </button>
                     <button type="button" class="btn btn-primary btn-sm" id="btn-open-camera">
-                      <i class="fa-solid fa-camera"></i> Chụp từ Camera
+                      <i class="fa-solid fa-camera"></i> Chụp Camera
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-paste-clipboard" title="Dán ảnh chụp màn hình từ bộ nhớ tạm (Ctrl + V)">
+                      <i class="fa-regular fa-paste"></i> Dán ảnh (Ctrl+V)
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-open-collage" title="Ghép 2-4 ảnh thành 1 khung vuông Locket">
+                      <i class="fa-solid fa-table-cells-large text-yellow"></i> Ghép ảnh (Collage)
                     </button>
                   </div>
                 </div>
@@ -302,18 +343,18 @@
                 </div>
               </div>
 
-              <!-- Smart Photo Format Studio (Tự động căn chỉnh ảnh ngang / Chụp màn hình máy tính) -->
+              <!-- Smart Photo Format Studio (Căn chỉnh mọi ảnh thành khung vuông Widget 1:1) -->
               <div id="landscape-formatter-box" class="landscape-formatter-card hidden">
                 <div class="formatter-header">
-                  <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <i class="fa-solid fa-crop-simple text-yellow"></i>
-                    <strong>Định dạng chuẩn Widget Locket</strong>
+                    <strong>Căn Chỉnh Khung Vuông Widget 1:1</strong>
                     <span class="badge-auto-fit">Tự động nhận diện</span>
                   </div>
                   <span class="text-muted" style="font-size:12px;" id="landscape-dim-info">1920x1080 (16:9)</span>
                 </div>
                 <p class="formatter-desc">
-                  Phát hiện ảnh chụp màn hình máy tính / ảnh ngang. Hệ thống tự động căn tỷ lệ 1:1 chuẩn Widget giữ nguyên 100% nội dung không bị cắt xén hay méo hình.
+                  Tự động căn chỉnh ảnh ngang/dọc về chuẩn vuông 1:1 của Widget Locket, giữ nguyên 100% nội dung không bị cắt xén hay méo hình.
                 </p>
                 <div class="formatter-modes-row">
                   <button type="button" class="format-mode-btn active" data-mode="blur">
@@ -321,6 +362,9 @@
                   </button>
                   <button type="button" class="format-mode-btn" data-mode="black">
                     <i class="fa-solid fa-square" style="color:#555;"></i> Nền Đen
+                  </button>
+                  <button type="button" class="format-mode-btn" data-mode="white">
+                    <i class="fa-regular fa-square" style="color:#fff;"></i> Nền Trắng
                   </button>
                   <button type="button" class="format-mode-btn" data-mode="crop">
                     <i class="fa-solid fa-scissors"></i> Cắt Vuông 1:1
@@ -334,18 +378,25 @@
                 </div>
               </div>
 
-              <!-- Caption Input -->
+              <!-- Caption Input + Smart Live Builder -->
               <div class="form-group">
                 <label for="moment-caption">
                   <span>Dòng trạng thái (Caption)</span>
                   <span id="caption-count" class="text-muted">0/150</span>
                 </label>
                 <input type="text" id="moment-caption" placeholder="Nhập cảm xúc của bạn..." maxlength="150">
+                <div class="smart-caption-tools">
+                  <button type="button" class="smart-cap-btn" id="btn-smart-time" title="Chèn giờ & ngày hiện tại">🕒 Giờ hiện tại</button>
+                  <button type="button" class="smart-cap-btn" id="btn-smart-weather" title="Lấy nhiệt độ & thời tiết thực tế">🌤️ Thời tiết</button>
+                  <button type="button" class="smart-cap-btn" id="btn-smart-battery" title="Hiển thị % pin thiết bị">🔋 Pin thiết bị</button>
+                  <button type="button" class="smart-cap-btn" id="btn-smart-location" title="Chèn địa điểm check-in">📍 Check-in</button>
+                  <button type="button" class="smart-cap-btn" id="btn-smart-random" title="Gợi ý caption Locket hay ngẫu nhiên">🎲 Caption ngẫu nhiên</button>
+                </div>
               </div>
 
               <!-- Photo Filters -->
               <div class="form-group">
-                <label><i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> Bộ lọc màu (Photo Filters)</label>
+                <label><i class="fa-solid fa-wand-magic-sparkles text-yellow"></i> <span>Bộ lọc màu (Photo Filters)</span></label>
                 <div class="filters-pill-group" id="filters-pill-group">
                   <button type="button" class="filter-pill active" data-filter="normal">Gốc</button>
                   <button type="button" class="filter-pill vip-filter-pill" data-filter="gold-luxury"><i class="fa-solid fa-crown text-yellow"></i> Gold 24K 👑</button>
@@ -355,12 +406,26 @@
                   <button type="button" class="filter-pill" data-filter="bw">Đen Trắng 🖤</button>
                   <button type="button" class="filter-pill" data-filter="sunset">Hoàng Hôn 🌅</button>
                   <button type="button" class="filter-pill" data-filter="cold">Băng Giá ❄️</button>
+                  <button type="button" class="filter-pill" data-filter="peach">Hồng Đào 🌸</button>
+                  <button type="button" class="filter-pill" data-filter="kodak">Film Nhật 🎞️</button>
+                </div>
+              </div>
+
+              <!-- Decorative Photo Frames & Timestamps -->
+              <div class="form-group">
+                <label><i class="fa-solid fa-border-all text-yellow"></i> <span>Khung viền & Tem ảnh (Photo Frames)</span></label>
+                <div class="filters-pill-group" id="frames-pill-group">
+                  <button type="button" class="frame-pill active" data-frame="none">Không viền</button>
+                  <button type="button" class="frame-pill vip-filter-pill" data-frame="vip-gold">👑 Khung Gold VIP</button>
+                  <button type="button" class="frame-pill" data-frame="camcorder">📼 Camcorder REC</button>
+                  <button type="button" class="frame-pill" data-frame="polaroid-mini">🤍 Viền Trắng Ngày Tháng</button>
+                  <button type="button" class="frame-pill" data-frame="timestamp">🕒 Tem Giờ Hiện Tại</button>
                 </div>
               </div>
 
               <!-- Quick Status Stickers -->
               <div class="form-group">
-                <label><i class="fa-solid fa-icons text-yellow"></i> Sticker & Trạng thái nhanh</label>
+                <label><i class="fa-solid fa-icons text-yellow"></i> <span>Sticker & Trạng thái nhanh</span></label>
                 <div class="quick-stickers-row">
                   <button type="button" class="sticker-chip vip-chip" data-text="👑 Locket VIP"><i class="fa-solid fa-crown text-yellow"></i> 👑 Locket VIP</button>
                   <button type="button" class="sticker-chip vip-chip" data-text="💎 Supreme Gold"><i class="fa-solid fa-gem text-cyan"></i> 💎 Supreme</button>
@@ -377,8 +442,8 @@
 
               <!-- Doodle / Drawing Studio -->
               <div class="form-group">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                  <label style="margin:0;"><i class="fa-solid fa-paintbrush text-yellow"></i> Vẽ tay lên ảnh (Doodle Studio)</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;">
+                  <label style="margin:0;"><i class="fa-solid fa-paintbrush text-yellow"></i> <span>Vẽ tay lên ảnh (Doodle Studio)</span></label>
                   <label class="switch-label" style="margin:0;">
                     <input type="checkbox" id="toggle-doodle-mode">
                     <span class="slider round"></span>
@@ -440,7 +505,7 @@
 
               <!-- NoteType / Preset Picker -->
               <div class="form-group">
-                <label><i class="fa-solid fa-palette text-yellow"></i> Kiểu nhãn (Preset Locket)</label>
+                <label><i class="fa-solid fa-palette text-yellow"></i> <span>Kiểu nhãn (Preset Locket)</span></label>
                 <select id="moment-preset-select" class="form-select">
                   <option value="standard">Tiêu chuẩn (Mặc định)</option>
                 </select>
@@ -479,7 +544,7 @@
 
               <!-- Recipients Choice -->
               <div class="form-group">
-                <label><i class="fa-solid fa-share-nodes"></i> Gửi đến</label>
+                <label><i class="fa-solid fa-share-nodes"></i> <span>Gửi đến</span></label>
                 <div class="recipients-options">
                   <label class="radio-label">
                     <input type="radio" name="recipient-mode" value="all" checked>
@@ -489,6 +554,15 @@
                     <input type="radio" name="recipient-mode" value="custom">
                     <span>Chọn bạn bè cụ thể</span>
                   </label>
+                  <label class="radio-label">
+                    <input type="radio" name="recipient-mode" value="private">
+                    <span>🔒 Chỉ mình tôi</span>
+                  </label>
+                </div>
+                <div id="friends-checklist-tools" class="friends-checklist-tools hidden">
+                  <input type="text" id="recipient-search-input" class="form-input" placeholder="Tìm nhanh bạn bè...">
+                  <button type="button" id="btn-select-all-recipients" class="btn btn-secondary btn-sm">Chọn tất cả</button>
+                  <button type="button" id="btn-clear-all-recipients" class="btn btn-secondary btn-sm">Bỏ chọn</button>
                 </div>
                 <!-- Friend Checklist -->
                 <div id="friends-checklist" class="friends-checklist hidden">
@@ -638,11 +712,11 @@
             <div class="icon-bubble"><i class="fa-solid fa-user-plus"></i></div>
             <div>
               <h4>Kết Bạn Mới</h4>
-              <p>Gửi lời mời kết bạn nhanh chóng qua username Locket</p>
+              <p>Gửi lời mời kết bạn nhanh qua @username hoặc dán link mời locket.cam</p>
             </div>
           </div>
           <div class="add-friend-form">
-            <input type="text" id="add-friend-username" placeholder="Nhập username (ví dụ: alex_locket)">
+            <input type="text" id="add-friend-username" placeholder="Nhập @username hoặc dán link locket.cam/...">
             <button id="btn-send-friend-request" class="btn btn-primary">
               <i class="fa-solid fa-paper-plane"></i>
               <span>Gửi lời mời</span>
@@ -652,8 +726,14 @@
 
         <!-- Incoming Requests Box (if any) -->
         <div id="friend-requests-box" class="friend-requests-box hidden">
-          <h3>Lời mời kết bạn đang chờ</h3>
+          <h3><i class="fa-solid fa-user-clock text-yellow"></i> Lời mời kết bạn đang chờ</h3>
           <div id="incoming-requests-list" class="incoming-requests-list"></div>
+        </div>
+
+        <!-- Outgoing Requests Box (if any) -->
+        <div id="outgoing-requests-box" class="friend-requests-box hidden">
+          <h3><i class="fa-solid fa-paper-plane text-muted"></i> Lời mời bạn đã gửi</h3>
+          <div id="outgoing-requests-list" class="incoming-requests-list"></div>
         </div>
 
         <!-- Friends List Grid -->
@@ -1011,7 +1091,7 @@
         </div>
         <div class="polaroid-controls">
           <div class="polaroid-control-group">
-            <label><i class="fa-solid fa-palette"></i> Phong cách viền</label>
+            <label><i class="fa-solid fa-palette"></i> <span>Phong cách viền</span></label>
             <div class="polaroid-themes-picker">
               <button class="frame-style-btn active" data-style="classic">⚪ Cổ Điển</button>
               <button class="frame-style-btn" data-style="dark">⚫ Huyền Bí</button>
@@ -1020,7 +1100,7 @@
             </div>
           </div>
           <div class="polaroid-control-group">
-            <label><i class="fa-solid fa-pen-nib"></i> Lời nhắn ghi chú (Tùy chỉnh)</label>
+            <label><i class="fa-solid fa-pen-nib"></i> <span>Lời nhắn ghi chú (Tùy chỉnh)</span></label>
             <input type="text" id="polaroid-caption-input" class="form-input" placeholder="Ghi chú thiệp kỷ niệm..." maxlength="120">
           </div>
           <div class="polaroid-actions-row">
@@ -1180,6 +1260,50 @@
           </button>
           <button type="button" id="btn-copy-invite-link" class="btn btn-secondary">
             <i class="fa-regular fa-copy"></i> Sao chép Link mời
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Collage Maker Studio (2-4 Photos to 1:1 Locket Square) -->
+  <div id="collage-modal" class="modal-backdrop hidden">
+    <div class="modal-box collage-modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-table-cells-large text-yellow"></i> Ghép Ảnh Locket (Collage Studio)</h3>
+        <button id="btn-close-collage-modal" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body collage-modal-body">
+        <div class="collage-preview-wrap">
+          <canvas id="collage-canvas" width="1080" height="1080"></canvas>
+        </div>
+        <div class="collage-controls">
+          <input type="file" id="collage-files-input" accept="image/*" multiple hidden>
+          <button type="button" id="btn-choose-collage-files" class="btn btn-primary btn-block">
+            <i class="fa-solid fa-images"></i> <span>Chọn 2 - 4 ảnh từ máy</span>
+          </button>
+
+          <div class="form-group">
+            <label><i class="fa-solid fa-table-cells text-yellow"></i> <span>Bố cục khung ghép</span></label>
+            <div class="collage-pills-row" id="collage-layout-picker">
+              <button type="button" class="collage-opt-btn active" data-layout="2h">2 Ảnh Ngang</button>
+              <button type="button" class="collage-opt-btn" data-layout="2v">2 Ảnh Dọc</button>
+              <button type="button" class="collage-opt-btn" data-layout="3split">3 Ảnh Nghệ Thuật</button>
+              <button type="button" class="collage-opt-btn" data-layout="4grid">Lưới 4 Ảnh (2×2)</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fa-solid fa-fill-drip text-yellow"></i> <span>Màu nền viền ghép</span></label>
+            <div class="collage-pills-row" id="collage-bg-picker">
+              <button type="button" class="collage-bg-btn active" data-bg="#0b0c0e">⬛ Đen Tuyền</button>
+              <button type="button" class="collage-bg-btn" data-bg="#ffffff">⬜ Trắng Sạch</button>
+              <button type="button" class="collage-bg-btn" data-bg="#ffd700">👑 Gold VIP</button>
+            </div>
+          </div>
+
+          <button type="button" id="btn-apply-collage" class="btn btn-gold btn-block btn-lg" disabled>
+            <i class="fa-solid fa-check"></i> <span>Áp dụng vào Khoảnh Khắc</span>
           </button>
         </div>
       </div>
