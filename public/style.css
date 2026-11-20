@@ -85,6 +85,30 @@
   --accent-yellow-light: rgba(255, 215, 0, 0.25);
   --shadow-glow: 0 0 24px rgba(255, 215, 0, 0.35);
 }
+[data-theme="cyber-vip"] {
+  --bg-primary: #050814;
+  --bg-secondary: #0a1026;
+  --bg-tertiary: #121b3b;
+  --bg-card: rgba(12, 18, 42, 0.92);
+  --border-subtle: rgba(0, 242, 254, 0.35);
+  --border-focus: #00f2fe;
+  --accent-yellow: #00f2fe;
+  --accent-yellow-hover: #00d2ff;
+  --accent-yellow-light: rgba(0, 242, 254, 0.2);
+  --shadow-glow: 0 0 26px rgba(0, 242, 254, 0.4);
+}
+[data-theme="emerald-vip"] {
+  --bg-primary: #04100b;
+  --bg-secondary: #091d14;
+  --bg-tertiary: #102e20;
+  --bg-card: rgba(11, 32, 22, 0.92);
+  --border-subtle: rgba(16, 185, 129, 0.38);
+  --border-focus: #10b981;
+  --accent-yellow: #10b981;
+  --accent-yellow-hover: #059669;
+  --accent-yellow-light: rgba(16, 185, 129, 0.22);
+  --shadow-glow: 0 0 26px rgba(16, 185, 129, 0.38);
+}
 
 * {
   margin: 0;
@@ -98,6 +122,7 @@ body {
   color: var(--text-primary);
   line-height: 1.5;
   overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -249,7 +274,8 @@ body {
   min-height: 100vh;
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  padding-left: 260px;
+  box-sizing: border-box;
 }
 
 /* Sidebar */
@@ -259,11 +285,15 @@ body {
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  bottom: 0;
   height: 100vh;
   padding: 24px 16px;
   flex-shrink: 0;
+  z-index: 100;
+  overflow-y: auto;
 }
 .brand {
   display: flex;
@@ -347,7 +377,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sidebar-footer .btn-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
 }
 .current-user-pill {
   display: flex;
@@ -355,7 +391,8 @@ body {
   gap: 10px;
   min-width: 0;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
+  padding: 4px 2px;
   cursor: pointer;
 }
 .user-avatar-sm {
@@ -373,16 +410,37 @@ body {
   min-width: 0;
   flex: 1;
   overflow: hidden;
+  padding-right: 4px;
 }
 .user-name {
   font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+  overflow: visible;
+}
+.user-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.user-name .admin-blue-tick {
+  flex-shrink: 0;
+  margin-left: 0;
+  font-size: 14px;
+}
+.sidebar-vip-crown {
+  flex-shrink: 0;
+  color: #ffd700 !important;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.55));
 }
 .user-handle {
   font-size: 12px;
@@ -399,8 +457,6 @@ body {
   padding: 28px 32px;
   max-width: 1320px;
   margin: 0 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
   width: 100%;
   box-sizing: border-box;
 }
@@ -477,6 +533,7 @@ h2 {
 
 /* Moment Card */
 .moment-card {
+  position: relative;
   background: var(--bg-card);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
@@ -2115,7 +2172,8 @@ input:focus, .form-select:focus {
   }
   .phone-frame {
     width: 300px;
-    height: 480px;
+    min-height: 450px;
+    height: auto;
   }
   .main-content {
     padding: 24px 20px;
@@ -2144,11 +2202,14 @@ input:focus, .form-select:focus {
 }
 
 @media (max-width: 768px) {
+  .app-layout {
+    padding-left: 0;
+  }
   .sidebar {
     display: none;
   }
   .main-content {
-    width: 100vw;
+    width: 100%;
     padding: 16px;
     padding-bottom: 80px;
   }
@@ -3902,4 +3963,323 @@ input:focus, .form-select:focus {
     max-width: 340px;
   }
 }
+
+/* ==========================================================================
+   MEGA UPDATE 5: LOCKET GOLD SUPREME VIP EXPANSION & AURAS
+   ========================================================================== */
+
+/* VIP Avatar Auras */
+.aura-rainbow {
+  border: 2.5px solid transparent !important;
+  background-image: linear-gradient(var(--bg-secondary), var(--bg-secondary)), conic-gradient(from 0deg, #ff2d55, #ffcc00, #34c759, #00f2fe, #a855f7, #ff2d55);
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.55) !important;
+  animation: auraRainbowPulse 3s linear infinite !important;
+}
+
+.aura-emerald {
+  border: 2.5px solid #10b981 !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.65), inset 0 0 8px rgba(16, 185, 129, 0.3) !important;
+  animation: none !important;
+}
+
+.aura-ice {
+  border: 2.5px solid #38bdf8 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.7), inset 0 0 8px rgba(224, 242, 254, 0.35) !important;
+  animation: none !important;
+}
+
+@keyframes auraRainbowPulse {
+  0% { box-shadow: 0 0 14px rgba(255, 45, 85, 0.55); }
+  50% { box-shadow: 0 0 22px rgba(0, 242, 254, 0.7); }
+  100% { box-shadow: 0 0 14px rgba(255, 45, 85, 0.55); }
+}
+
+/* New Live VIP Frames & Watermark */
+.preview-frame-overlay.frame-neon-cyber {
+  border: 5px solid #00f2fe;
+  border-radius: 30px;
+  box-shadow: inset 0 0 22px rgba(0, 242, 254, 0.55), inset 0 0 0 2px rgba(168, 85, 247, 0.75);
+}
+
+.preview-frame-overlay.frame-neon-cyber::before {
+  content: "⚡ CYBER VIP · " attr(data-timestamp);
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #00f2fe, #a855f7);
+  color: #050814;
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.preview-frame-overlay.frame-cinema-vip {
+  border-top: 34px solid #050507;
+  border-bottom: 34px solid #050507;
+  border-radius: 30px;
+}
+
+.preview-frame-overlay.frame-cinema-vip::before {
+  content: "🎬 CINEMA LOCKET VIP";
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffd700;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  white-space: nowrap;
+}
+
+.preview-frame-overlay.frame-cinema-vip::after {
+  content: attr(data-timestamp);
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.preview-vip-watermark {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.92), rgba(255, 149, 0, 0.92));
+  color: #000;
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 3px 9px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  letter-spacing: 0.4px;
+  z-index: 9;
+  pointer-events: none;
+}
+
+/* VIP Studio Pro Image Enhancer Card */
+.vip-studio-pro-box {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(255, 149, 0, 0.04));
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.vip-studio-pro-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vip-studio-pro-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffd700;
+  flex-wrap: wrap;
+}
+
+.vip-studio-pro-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vip-toggle-pill {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  color: var(--text-primary);
+  padding: 5px 11px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.vip-toggle-pill:hover,
+.vip-toggle-pill.active {
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  color: #000;
+  border-color: #ffd700;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+}
+
+.vip-sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.vip-slider-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vip-slider-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vip-slider-item input[type="range"] {
+  width: 100%;
+  accent-color: #ffd700;
+  cursor: pointer;
+}
+
+/* VIP Super Reaction Burst */
+.vip-combo-react-btn {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.25), rgba(255, 149, 0, 0.2)) !important;
+  border: 1px solid rgba(255, 215, 0, 0.55) !important;
+  color: #ffd700 !important;
+  font-size: 13px !important;
+  font-weight: 800;
+  padding: 4px 9px !important;
+  border-radius: var(--radius-full) !important;
+}
+
+.vip-combo-react-btn:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+}
+
+.vip-floating-particle {
+  position: absolute;
+  bottom: 18px;
+  font-size: 26px;
+  pointer-events: none;
+  z-index: 30;
+  animation: vipFloatUp 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes vipFloatUp {
+  0% { opacity: 0; transform: translateY(0) scale(0.5) rotate(0deg); }
+  20% { opacity: 1; transform: translateY(-30px) scale(1.2) rotate(-10deg); }
+  100% { opacity: 0; transform: translateY(-220px) scale(0.95) rotate(18deg); }
+}
+
+/* VIP Customization Console in Profile */
+.vip-customizer-console {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 215, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vip-customizer-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vip-console-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.vip-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.vip-opt-pill,
+.vip-theme-pill,
+.vip-title-preset-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.vip-opt-pill:hover,
+.vip-opt-pill.active,
+.vip-theme-pill:hover,
+.vip-theme-pill.active,
+.vip-title-preset-btn:hover {
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  color: #000;
+  border-color: #ffd700;
+  font-weight: 700;
+}
+
+.vip-title-editor-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vip-title-editor-row input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+}
+
+/* Chat VIP Quick Replies Bar */
+.chat-vip-quick-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 20px;
+  overflow-x: auto;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(20, 22, 26, 0.65);
+  scrollbar-width: thin;
+}
+
+.chat-vip-chip {
+  background: rgba(255, 215, 0, 0.12);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  color: #ffd700;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.chat-vip-chip:hover {
+  background: #ffd700;
+  color: #000;
+  transform: translateY(-1px);
+}
+
 

@@ -248,8 +248,33 @@ function formatOverlayIcon(icon) {
   return "";
 }
 
+function cleanDisplayName(raw) {
+  return String(raw || "")
+    .replace(/^[\s\u00A0\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F\u2060\u2800\u3000\u3164\uFEFF]+|[\s\u00A0\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F\u2060\u2800\u3000\u3164\uFEFF]+$/g, "")
+    .replace(/[\s\u00A0\u2000-\u200B\u2800\u3000\u3164]+/g, " ")
+    .trim();
+}
+
+function getVipCustomTitle() {
+  return cleanDisplayName(localStorage.getItem("locket_vip_title") || "VIP") || "VIP";
+}
+
+function getVipAuraKey() {
+  return localStorage.getItem("locket_vip_aura") || "gold";
+}
+
+function applyVipAuraToElement(avatarEl) {
+  if (!avatarEl) return;
+  avatarEl.classList.remove("vip-avatar-glow", "aura-rainbow", "aura-emerald", "aura-ice");
+  const aura = getVipAuraKey();
+  if (aura === "rainbow") avatarEl.classList.add("aura-rainbow");
+  else if (aura === "emerald") avatarEl.classList.add("aura-emerald");
+  else if (aura === "ice") avatarEl.classList.add("aura-ice");
+  else avatarEl.classList.add("vip-avatar-glow");
+}
+
 function getDefaultAvatar(name = "User") {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=2c2e35&color=ffcc00&bold=true`;
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanDisplayName(name) || "User")}&background=2c2e35&color=ffcc00&bold=true`;
 }
 
 // ================= Tab Management ================= //
@@ -271,6 +296,8 @@ function switchTab(tabId) {
       pane.classList.remove("active");
     }
   });
+
+  window.scrollTo({ top: 0, behavior: "instant" });
 
   if (tabId === "feed" && state.moments.length === 0) {
     loadFeed();
@@ -371,8 +398,16 @@ if (btnDemoPreview) {
     const guestAvatar = getDefaultAvatar("Locket");
     el.sidebarAvatar.src = guestAvatar;
     el.mobileAvatar.src = guestAvatar;
-    el.sidebarName.textContent = "Khách xem trước";
+    el.profileCardAvatar.src = guestAvatar;
+    applyVipAuraToElement(el.sidebarAvatar);
+    applyVipAuraToElement(el.mobileAvatar);
+    applyVipAuraToElement(el.profileCardAvatar);
+    el.sidebarName.innerHTML = `<span class="user-name-text">Khách xem trước</span><span class="sidebar-vip-crown" title="Locket Gold Supreme VIP"><i class="fa-solid fa-crown"></i></span>`;
     el.sidebarUsername.textContent = "@studio_preview";
+    el.profileFullName.innerHTML = `Khách xem trước <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown"></i> ${escapeHtml(getVipCustomTitle())}</span>`;
+    el.profileHandle.textContent = "@studio_preview";
+    const vipHolder = document.getElementById("vip-card-holder");
+    if (vipHolder) vipHolder.textContent = "KHÁCH XEM TRƯỚC VIP";
     switchTab("post");
     showToast("✨ Chế độ xem trước Studio! Đăng nhập để kết nối bạn bè & đăng lên Locket.", "info");
   });
@@ -435,45 +470,45 @@ function isInitialAdminUser(user) {
 
 function renderCurrentUser() {
   if (!state.user) return;
-  const fullName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.username || "Tôi";
+  const rawFull = `${cleanDisplayName(state.user.first_name)} ${cleanDisplayName(state.user.last_name)}`.trim();
+  const fullName = cleanDisplayName(rawFull) || cleanDisplayName(state.user.username) || "Tôi";
   const avatarUrl = state.user.profile_picture_url || getDefaultAvatar(fullName);
   const isAdmin = isInitialAdminUser(state.user);
   state.isAdmin = isAdmin;
 
+  const vipTitle = escapeHtml(getVipCustomTitle());
   const adminTickHtml = isAdmin
     ? ` <span class="admin-blue-tick" title="Quản trị viên đã xác minh (Admin Verified)"><i class="fa-solid fa-circle-check"></i></span> <span class="badge-admin-verified"><i class="fa-solid fa-shield-halved"></i> ADMIN</span>`
     : "";
-  const compactSidebarBadges = `${isAdmin ? ' <span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>' : ""} <i class="fa-solid fa-crown text-yellow" style="font-size:12px;" title="Locket Gold VIP"></i>`;
+  const compactSidebarBadges = `${isAdmin ? '<span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>' : ""}<span class="sidebar-vip-crown" title="Locket Gold Supreme VIP"><i class="fa-solid fa-crown"></i></span>`;
 
   el.sidebarAvatar.src = avatarUrl;
   el.mobileAvatar.src = avatarUrl;
-  el.sidebarName.innerHTML = `${escapeHtml(fullName)}${compactSidebarBadges}`;
+  el.sidebarName.innerHTML = `<span class="user-name-text">${escapeHtml(fullName)}</span>${compactSidebarBadges}`;
   el.sidebarUsername.textContent = `@${state.user.username || "me"}`;
 
-  // VIP & Admin Avatar Glow
-  el.sidebarAvatar.classList.add("vip-avatar-glow");
-  el.mobileAvatar.classList.add("vip-avatar-glow");
-  if (isAdmin) {
+  // VIP Aura & Admin Avatar Glow
+  applyVipAuraToElement(el.sidebarAvatar);
+  applyVipAuraToElement(el.mobileAvatar);
+  applyVipAuraToElement(el.profileCardAvatar);
+  const auraKey = getVipAuraKey();
+  if (isAdmin && auraKey === "gold") {
     el.sidebarAvatar.classList.add("admin-avatar-ring");
     el.mobileAvatar.classList.add("admin-avatar-ring");
+    el.profileCardAvatar.classList.add("admin-avatar-ring");
   } else {
     el.sidebarAvatar.classList.remove("admin-avatar-ring");
     el.mobileAvatar.classList.remove("admin-avatar-ring");
+    el.profileCardAvatar.classList.remove("admin-avatar-ring");
   }
 
   // Profile tab fields
   el.profileCardAvatar.src = avatarUrl;
-  el.profileCardAvatar.classList.add("vip-avatar-glow");
-  if (isAdmin) {
-    el.profileCardAvatar.classList.add("admin-avatar-ring");
-  } else {
-    el.profileCardAvatar.classList.remove("admin-avatar-ring");
-  }
-  el.profileFullName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>`;
+  el.profileFullName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown" style="color:#ffd700;"></i> ${vipTitle}</span>`;
   el.profileHandle.textContent = `@${state.user.username || "me"}`;
   el.profileUidBadge.textContent = `UID: ${state.user.uid || "..."}`;
-  el.profileFirstName.value = state.user.first_name || "";
-  el.profileLastName.value = state.user.last_name || "";
+  el.profileFirstName.value = cleanDisplayName(state.user.first_name || "");
+  el.profileLastName.value = cleanDisplayName(state.user.last_name || "");
   el.profileEmail.textContent = state.user.email || "Đã liên kết";
 
   // Admin Badge in Profile Badges list
@@ -518,7 +553,7 @@ function renderFriendsFilter() {
   state.friends.forEach(f => {
     const opt = document.createElement("option");
     opt.value = f.uid;
-    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username;
+    const name = cleanDisplayName(`${cleanDisplayName(f.first_name)} ${cleanDisplayName(f.last_name)}`) || cleanDisplayName(f.username) || "Bạn bè";
     opt.textContent = `${name} (@${f.username || "friend"})`;
     el.feedFilterFriend.appendChild(opt);
   });
@@ -544,7 +579,7 @@ function updatePhoneRecipientPill() {
 function renderFriendsChecklist() {
   el.friendsChecklist.innerHTML = "";
   state.friends.forEach(f => {
-    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username || "Bạn bè";
+    const name = cleanDisplayName(`${f.first_name || ""} ${f.last_name || ""}`) || f.username || "Bạn bè";
     const uname = (f.username || "").toLowerCase();
     const item = document.createElement("label");
     item.className = "friend-check-item";
@@ -574,7 +609,7 @@ function renderFriendsGrid(friendsList) {
 
   el.friendsGrid.innerHTML = "";
   friendsList.forEach(f => {
-    const name = `${f.first_name || ""} ${f.last_name || ""}`.trim() || f.username || "Bạn bè";
+    const name = cleanDisplayName(`${f.first_name || ""} ${f.last_name || ""}`) || f.username || "Bạn bè";
     const card = document.createElement("div");
     card.className = "friend-card";
     card.innerHTML = `
@@ -684,7 +719,7 @@ async function loadFriendRequests() {
       el.incomingRequestsList.innerHTML = "";
       incoming.forEach(req => {
         const uidStr = String(req.user_uid || req.uid || "");
-        const displayName = `${req.first_name || ""} ${req.last_name || ""}`.trim() || req.username || `UID: ${uidStr}`;
+        const displayName = cleanDisplayName(`${req.first_name || ""} ${req.last_name || ""}`) || req.username || `UID: ${uidStr}`;
         const avatarUrl = req.profile_picture_url || getDefaultAvatar(displayName);
         const item = document.createElement("div");
         item.className = "friend-card";
@@ -715,7 +750,7 @@ async function loadFriendRequests() {
         outgoingList.innerHTML = "";
         outgoing.forEach(req => {
           const uidStr = String(req.user_uid || req.uid || "");
-          const displayName = `${req.first_name || ""} ${req.last_name || ""}`.trim() || req.username || `UID: ${uidStr}`;
+          const displayName = cleanDisplayName(`${req.first_name || ""} ${req.last_name || ""}`) || req.username || `UID: ${uidStr}`;
           const avatarUrl = req.profile_picture_url || getDefaultAvatar(displayName);
           const item = document.createElement("div");
           item.className = "friend-card";
@@ -898,7 +933,7 @@ function renderFeed() {
     card.id = `moment-${m.moment_uid}`;
 
     const author = m.author || {};
-    const authorName = `${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè";
+    const authorName = cleanDisplayName(`${author.first_name || ""} ${author.last_name || ""}`) || author.username || "Bạn bè";
     const authorAvatar = author.profile_picture_url || getDefaultAvatar(authorName);
     const timeAgo = formatTimeAgo(m.date || (m.created_at ? new Date(parseInt(m.created_at) * 1000) : null));
     const isFav = state.favorites && state.favorites.has(m.moment_uid);
@@ -941,6 +976,11 @@ function renderFeed() {
     // Delete button if author is me
     const isMe = author.is_me;
     const authorIsAdmin = isMe && isInitialAdminUser(state.user);
+    const vipAuraKey = getVipAuraKey();
+    const vipAuraClass = isMe
+      ? (vipAuraKey === "rainbow" ? "aura-rainbow" : vipAuraKey === "emerald" ? "aura-emerald" : vipAuraKey === "ice" ? "aura-ice" : "vip-avatar-glow")
+      : "";
+    const vipTitleText = getVipCustomTitle();
     const authorAdminTick = authorIsAdmin
       ? ` <span class="admin-blue-tick" title="Admin Tích Xanh chính thức"><i class="fa-solid fa-circle-check"></i></span>`
       : "";
@@ -951,9 +991,9 @@ function renderFeed() {
     card.innerHTML = `
       <div class="moment-header">
         <div class="moment-author">
-          <img src="${authorAvatar}" alt="${authorName}" class="author-avatar ${isMe ? 'vip-avatar-glow' : ''} ${authorIsAdmin ? 'admin-avatar-ring' : ''}">
+          <img src="${authorAvatar}" alt="${escapeHtml(authorName)}" class="author-avatar ${vipAuraClass} ${authorIsAdmin && vipAuraKey === 'gold' ? 'admin-avatar-ring' : ''}">
           <div class="author-info">
-            <span class="author-name">${escapeHtml(authorName)}${authorAdminTick}${isMe ? ' <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> VIP</span>' : ''}</span>
+            <span class="author-name">${escapeHtml(authorName)}${authorAdminTick}${isMe ? ` <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> ${escapeHtml(vipTitleText)}</span>` : ''}</span>
             <span class="moment-time">${timeAgo}</span>
           </div>
         </div>
@@ -980,6 +1020,7 @@ function renderFeed() {
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="🫶">🫶</button>
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="💛">💛</button>
           <button class="reaction-emoji-btn" data-moment="${m.moment_uid}" data-emoji="😭">😭</button>
+          <button class="reaction-emoji-btn vip-combo-react-btn" data-moment="${m.moment_uid}" title="Bão Cảm Xúc VIP (Thả liên hoàn biểu cảm)">⚡👑</button>
         </div>
 
         <div class="moment-comment-row">
@@ -1112,6 +1153,10 @@ function renderFeed() {
     card.querySelectorAll(".reaction-emoji-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const momentUid = btn.dataset.moment;
+        if (btn.classList.contains("vip-combo-react-btn")) {
+          triggerVipReactionBurst(momentUid, card);
+          return;
+        }
         const emoji = btn.dataset.emoji;
         sendReaction(momentUid, emoji, btn);
       });
@@ -1169,6 +1214,40 @@ async function sendReaction(momentUid, emoji, btnElement) {
   } catch (e) {
     showToast("Lỗi thả cảm xúc: " + e.message, "error");
   }
+}
+
+async function triggerVipReactionBurst(momentUid, containerEl) {
+  if (!momentUid) return;
+  const emojis = ["❤️", "🔥", "😍", "👑", "💛", "🫶", "✨", "🥳"];
+  playPopSound();
+
+  const host = containerEl || document.body;
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement("span");
+    p.className = "vip-floating-particle";
+    p.textContent = emojis[i % emojis.length];
+    const leftPct = 10 + Math.random() * 80;
+    const delayMs = i * 55;
+    p.style.left = `${leftPct}%`;
+    p.style.bottom = "56px";
+    p.style.animationDelay = `${delayMs}ms`;
+    host.appendChild(p);
+    setTimeout(() => p.remove(), 1450 + delayMs);
+  }
+
+  if (typeof getSessionToken === "function" && getSessionToken()) {
+    const burstSet = ["❤️", "🔥", "👑"];
+    burstSet.forEach((em, idx) => {
+      setTimeout(() => {
+        apiFetch("/api/moments/react", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ momentUid, reaction: em })
+        }).catch(() => {});
+      }, idx * 180);
+    });
+  }
+  showToast("⚡👑 Đã phóng Bão Cảm Xúc VIP!", "success");
 }
 
 // Delete moment
@@ -1801,7 +1880,7 @@ async function loadConversations() {
     el.conversationsList.innerHTML = "";
     convs.forEach(c => {
       const peer = c.peer || {};
-      const peerName = `${peer.first_name || ""} ${peer.last_name || ""}`.trim() || peer.username || "Bạn bè";
+      const peerName = cleanDisplayName(`${peer.first_name || ""} ${peer.last_name || ""}`) || peer.username || "Bạn bè";
       const peerAvatar = peer.profile_picture_url || getDefaultAvatar(peerName);
       const snippet = c.latest_message ? c.latest_message.text : "Đã bắt đầu cuộc trò chuyện";
       const time = c.latest_message ? formatTimeAgo(c.latest_message.timestamp) : "";
@@ -1844,7 +1923,7 @@ async function openChatWithFriend(friend) {
   state.activeChatPeer = friend;
   switchTab("chat");
 
-  const name = `${friend.first_name || ""} ${friend.last_name || ""}`.trim() || friend.username || "Bạn bè";
+  const name = cleanDisplayName(`${friend.first_name || ""} ${friend.last_name || ""}`) || friend.username || "Bạn bè";
   const avatar = friend.profile_picture_url || getDefaultAvatar(name);
 
   el.chatPeerAvatar.src = avatar;
@@ -1853,6 +1932,8 @@ async function openChatWithFriend(friend) {
 
   el.chatHeader.classList.remove("hidden");
   el.chatInputBar.classList.remove("hidden");
+  const quickBar = document.getElementById("chat-vip-quick-bar");
+  if (quickBar) quickBar.classList.remove("hidden");
 
   // Load messages
   el.chatMessagesWrap.innerHTML = `
@@ -2151,7 +2232,7 @@ function renderStoriesBar() {
   bar.innerHTML = "";
   for (const [uid, group] of userMap.entries()) {
     const author = group.author || {};
-    const name = author.is_me ? "Tôi" : (author.first_name || author.username || "Bạn bè");
+    const name = author.is_me ? "Tôi" : (cleanDisplayName(author.first_name || "") || author.username || "Bạn bè");
     const avatar = author.profile_picture_url || getDefaultAvatar(name);
 
     const item = document.createElement("div");
@@ -2209,7 +2290,7 @@ function renderStorySlide() {
   }
 
   const author = m.author || {};
-  const name = author.is_me ? "Khoảnh khắc của tôi" : (`${author.first_name || ""} ${author.last_name || ""}`.trim() || author.username || "Bạn bè");
+  const name = author.is_me ? "Khoảnh khắc của tôi" : (cleanDisplayName(`${author.first_name || ""} ${author.last_name || ""}`) || author.username || "Bạn bè");
   const authorNameEl = document.getElementById("story-author-name");
   const authorAvatarEl = document.getElementById("story-author-avatar");
   const timeAgoEl = document.getElementById("story-time-ago");
@@ -2351,6 +2432,17 @@ document.querySelectorAll(".story-reaction-btn").forEach(btn => {
   });
 });
 
+const btnStoryVipCombo = document.getElementById("btn-story-vip-combo");
+if (btnStoryVipCombo) {
+  btnStoryVipCombo.addEventListener("click", () => {
+    const m = activeStoryMoments[activeStoryIndex];
+    if (m) {
+      const floatHost = document.getElementById("story-floating-reactions") || document.getElementById("story-viewer-modal");
+      triggerVipReactionBurst(m.moment_uid, floatHost);
+    }
+  });
+}
+
 // Story Reply input
 const storyReplyInput = document.getElementById("story-reply-input");
 const btnSendStoryReply = document.getElementById("btn-send-story-reply");
@@ -2402,9 +2494,11 @@ window.addEventListener("keydown", (e) => {
 });
 
 
-// ================= THEME SWITCHER (Gold Luxury, Classic Gold, Purple, Blue, Pink, AMOLED) ================= //
+// ================= THEME SWITCHER (Gold Luxury, Cyber Neon, Emerald, Classic Gold, Purple, Blue, Pink, AMOLED) ================= //
 const THEMES = [
   { id: "gold-luxury", name: "👑 Locket Gold Luxury (VIP)" },
+  { id: "cyber-vip", name: "⚡ Cyber Neon VIP" },
+  { id: "emerald-vip", name: "💎 Ngọc Lục Bảo VIP" },
   { id: "gold", name: "Locket Classic Gold 💛" },
   { id: "purple", name: "Cyberpunk Purple 💜" },
   { id: "blue", name: "Deep Ocean Blue 💙" },
@@ -2419,7 +2513,12 @@ function applyTheme(themeId) {
   } else {
     document.body.setAttribute("data-theme", themeId);
   }
+  const idx = THEMES.findIndex(t => t.id === themeId);
+  if (idx >= 0) currentThemeIndex = idx;
   localStorage.setItem("locket_theme", themeId);
+  document.querySelectorAll(".vip-theme-pill").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.themeId === themeId);
+  });
 }
 
 function initTheme() {
@@ -2446,6 +2545,13 @@ initTheme();
 // ================= PHOTO FILTERS, FRAMES & MUSIC STICKER IN STUDIO ================= //
 let currentFilter = "normal";
 let currentFrame = "none";
+const vipStudioState = {
+  autoHdr: false,
+  watermark: false,
+  brightness: 100,
+  contrast: 100,
+  saturate: 100
+};
 
 const FILTER_CLASSES = [
   "filter-vintage",
@@ -2472,6 +2578,45 @@ const FILTER_CANVAS_MAP = {
   kodak: "sepia(0.22) contrast(1.18) saturate(1.28) brightness(1.02)"
 };
 
+function getCombinedCanvasFilter() {
+  const parts = [];
+  const baseFilter = FILTER_CANVAS_MAP[currentFilter];
+  if (baseFilter && baseFilter !== "none") {
+    parts.push(baseFilter);
+  }
+  if (vipStudioState.autoHdr) {
+    parts.push("contrast(1.12) saturate(1.18) brightness(1.04)");
+  }
+  if (vipStudioState.brightness !== 100) {
+    parts.push(`brightness(${(vipStudioState.brightness / 100).toFixed(2)})`);
+  }
+  if (vipStudioState.contrast !== 100) {
+    parts.push(`contrast(${(vipStudioState.contrast / 100).toFixed(2)})`);
+  }
+  if (vipStudioState.saturate !== 100) {
+    parts.push(`saturate(${(vipStudioState.saturate / 100).toFixed(2)})`);
+  }
+  return parts.length > 0 ? parts.join(" ") : "none";
+}
+
+function applyPreviewImageEffects() {
+  const img = document.getElementById("preview-image");
+  const vid = document.getElementById("preview-video");
+  const combined = getCombinedCanvasFilter();
+  const cssVal = combined === "none" ? "" : combined;
+  if (img) img.style.filter = cssVal;
+  if (vid) vid.style.filter = cssVal;
+
+  const wm = document.getElementById("preview-vip-watermark");
+  if (wm) {
+    wm.classList.toggle("hidden", !vipStudioState.watermark);
+    if (vipStudioState.watermark) {
+      const customTitle = getVipCustomTitle();
+      wm.textContent = customTitle && customTitle !== "VIP" ? `👑 ${customTitle}` : "👑 LOCKET VIP";
+    }
+  }
+}
+
 function formatFrameTimestamp() {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0");
@@ -2497,18 +2642,43 @@ function updateLiveFrameOverlay() {
 function resetStudioEffects() {
   currentFilter = "normal";
   currentFrame = "none";
+  vipStudioState.autoHdr = false;
+  vipStudioState.watermark = false;
+  vipStudioState.brightness = 100;
+  vipStudioState.contrast = 100;
+  vipStudioState.saturate = 100;
+
   document.querySelectorAll(".filter-pill").forEach(p => {
     p.classList.toggle("active", p.dataset.filter === "normal");
   });
   document.querySelectorAll(".frame-pill").forEach(p => {
     p.classList.toggle("active", p.dataset.frame === "none");
   });
+  const btnHdr = document.getElementById("btn-vip-auto-hdr");
+  const btnWm = document.getElementById("btn-vip-watermark");
+  if (btnHdr) btnHdr.classList.remove("active");
+  if (btnWm) btnWm.classList.remove("active");
+
+  const sB = document.getElementById("vip-slider-brightness");
+  const sC = document.getElementById("vip-slider-contrast");
+  const sS = document.getElementById("vip-slider-saturate");
+  const vB = document.getElementById("val-vip-brightness");
+  const vC = document.getElementById("val-vip-contrast");
+  const vS = document.getElementById("val-vip-saturate");
+  if (sB) sB.value = 100;
+  if (sC) sC.value = 100;
+  if (sS) sS.value = 100;
+  if (vB) vB.textContent = "100%";
+  if (vC) vC.textContent = "100%";
+  if (vS) vS.textContent = "100%";
+
   const img = document.getElementById("preview-image");
   const vid = document.getElementById("preview-video");
   FILTER_CLASSES.forEach(c => {
     if (img) img.classList.remove(c);
     if (vid) vid.classList.remove(c);
   });
+  applyPreviewImageEffects();
   updateLiveFrameOverlay();
 }
 
@@ -2595,7 +2765,85 @@ function drawFrameOnCanvas(ctx, w, h, frameType) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(ts, bx + badgeW / 2, by + badgeH / 2);
+  } else if (frameType === "neon-cyber") {
+    const bw = Math.max(14, Math.round(w * 0.02));
+    const cyberGrad = ctx.createLinearGradient(0, 0, w, h);
+    cyberGrad.addColorStop(0, "#ff00ff");
+    cyberGrad.addColorStop(0.5, "#7b2ff7");
+    cyberGrad.addColorStop(1, "#00f0ff");
+    ctx.strokeStyle = cyberGrad;
+    ctx.lineWidth = bw * 2;
+    ctx.strokeRect(0, 0, w, h);
+
+    const badgeW = Math.round(w * 0.25);
+    const badgeH = Math.round(h * 0.044);
+    const bx = Math.round(w * 0.04);
+    const by = Math.round(h * 0.04);
+    ctx.fillStyle = "rgba(10, 6, 28, 0.86)";
+    if (typeof drawRoundRect === "function") {
+      drawRoundRect(ctx, bx, by, badgeW, badgeH, badgeH / 2);
+      ctx.fill();
+      ctx.strokeStyle = "#00f0ff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#00f0ff";
+    ctx.font = `900 ${Math.max(15, Math.round(w * 0.022))}px -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⚡ CYBER VIP", bx + badgeW / 2, by + badgeH / 2);
+  } else if (frameType === "cinema-vip") {
+    const barH = Math.round(h * 0.115);
+    ctx.fillStyle = "#050608";
+    ctx.fillRect(0, 0, w, barH);
+    ctx.fillRect(0, h - barH, w, barH);
+
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.35)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, barH);
+    ctx.lineTo(w, barH);
+    ctx.moveTo(0, h - barH);
+    ctx.lineTo(w, h - barH);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffd700";
+    ctx.font = `700 ${Math.max(16, Math.round(w * 0.022))}px -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`✦ LOCKET CINEMA 21:9 · ${ts} ✦`, w / 2, h - barH / 2);
   }
+  ctx.restore();
+}
+
+function drawVipWatermarkOnCanvas(ctx, w, h) {
+  ctx.save();
+  const customTitle = getVipCustomTitle();
+  const label = customTitle && customTitle !== "VIP" ? `👑 ${customTitle}` : "👑 LOCKET VIP";
+  const fontSize = Math.max(16, Math.round(w * 0.023));
+  ctx.font = `900 ${fontSize}px -apple-system, sans-serif`;
+  const textW = ctx.measureText(label).width;
+  const padX = Math.round(w * 0.025);
+  const pillW = Math.round(textW + padX * 2);
+  const pillH = Math.round(fontSize * 1.9);
+  const margin = Math.round(w * 0.032);
+  const x = w - pillW - margin;
+  const y = h - pillH - margin;
+
+  ctx.fillStyle = "rgba(10, 11, 14, 0.78)";
+  if (typeof drawRoundRect === "function") {
+    drawRoundRect(ctx, x, y, pillW, pillH, pillH / 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.75)";
+    ctx.lineWidth = Math.max(2, Math.round(w * 0.003));
+    ctx.stroke();
+  } else {
+    ctx.fillRect(x, y, pillW, pillH);
+  }
+  ctx.fillStyle = "#ffd700";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x + pillW / 2, y + pillH / 2);
   ctx.restore();
 }
 
@@ -2606,10 +2854,12 @@ async function getProcessedUploadFile() {
   const toggleDoodle = document.getElementById("toggle-doodle-mode");
   const doodleCanvas = document.getElementById("doodle-canvas");
   const hasDoodle = Boolean(toggleDoodle && toggleDoodle.checked && typeof doodleState !== "undefined" && doodleState.hasDrawn && doodleCanvas);
-  const hasFilter = currentFilter && currentFilter !== "normal";
+  const combinedFilter = getCombinedCanvasFilter();
+  const hasFilter = combinedFilter !== "none";
   const hasFrame = currentFrame && currentFrame !== "none";
+  const hasWatermark = Boolean(vipStudioState.watermark);
 
-  if (!hasDoodle && !hasFilter && !hasFrame) {
+  if (!hasDoodle && !hasFilter && !hasFrame && !hasWatermark) {
     return state.selectedFile;
   }
 
@@ -2626,12 +2876,15 @@ async function getProcessedUploadFile() {
       const offCtx = offscreen.getContext("2d");
 
       offCtx.save();
-      offCtx.filter = FILTER_CANVAS_MAP[currentFilter] || "none";
+      offCtx.filter = combinedFilter;
       offCtx.drawImage(img, 0, 0, w, h);
       offCtx.restore();
 
       if (hasFrame) {
         drawFrameOnCanvas(offCtx, w, h, currentFrame);
+      }
+      if (hasWatermark) {
+        drawVipWatermarkOnCanvas(offCtx, w, h);
       }
       if (hasDoodle) {
         offCtx.drawImage(doodleCanvas, 0, 0, w, h);
@@ -2670,6 +2923,7 @@ document.querySelectorAll(".filter-pill").forEach(btn => {
       if (img) img.classList.add(cls);
       if (vid) vid.classList.add(cls);
     }
+    applyPreviewImageEffects();
   });
 });
 
@@ -4525,7 +4779,7 @@ function initLocketVipSuite() {
   if (btnDownloadVip) {
     btnDownloadVip.addEventListener("click", () => {
       const user = state.user || {};
-      const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "HOANG GIA VIP";
+      const name = cleanDisplayName(`${user.first_name || ""} ${user.last_name || ""}`) || user.username || "HOANG GIA VIP";
       const last4 = user.uid ? user.uid.slice(-4).toUpperCase() : "GOLD";
 
       const canvas = document.createElement("canvas");
@@ -4633,12 +4887,13 @@ function initLocketVipSuite() {
       ctx.fillText("VĨNH VIỄN ✦", 420, 425);
 
       // Rank
+      const customRank = getVipCustomTitle();
       ctx.fillStyle = "#8e8d96";
       ctx.font = "bold 13px -apple-system, sans-serif";
       ctx.fillText("CẤP BẬC", 650, 385);
       ctx.fillStyle = isAdmin ? "#00c6ff" : "#ffd700";
       ctx.font = "bold 20px -apple-system, sans-serif";
-      ctx.fillText(isAdmin ? "ROOT ADMIN 🛡️" : "SUPREME VIP 👑", 650, 425);
+      ctx.fillText(isAdmin ? "ROOT ADMIN 🛡️" : `${customRank.toUpperCase()} 👑`, 650, 425);
 
       // Watermark
       ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
@@ -5017,6 +5272,204 @@ function initFeedLayoutToggle() {
   });
 }
 
+// ================= 8. VIP PRO STUDIO, CUSTOMIZER, BATCH HD & QUICK CHAT ================= //
+function initVipStudioEnhancer() {
+  const btnHdr = document.getElementById("btn-vip-auto-hdr");
+  const btnWm = document.getElementById("btn-vip-watermark");
+  const btnReset = document.getElementById("btn-reset-vip-adjust");
+  const sB = document.getElementById("vip-slider-brightness");
+  const sC = document.getElementById("vip-slider-contrast");
+  const sS = document.getElementById("vip-slider-saturate");
+  const vB = document.getElementById("val-vip-brightness");
+  const vC = document.getElementById("val-vip-contrast");
+  const vS = document.getElementById("val-vip-saturate");
+
+  if (btnHdr) {
+    btnHdr.addEventListener("click", () => {
+      playPopSound();
+      vipStudioState.autoHdr = !vipStudioState.autoHdr;
+      btnHdr.classList.toggle("active", vipStudioState.autoHdr);
+      applyPreviewImageEffects();
+      showToast(vipStudioState.autoHdr ? "✨ Đã bật Auto HDR 4K VIP!" : "Đã tắt Auto HDR 4K", "info");
+    });
+  }
+
+  if (btnWm) {
+    btnWm.addEventListener("click", () => {
+      playPopSound();
+      vipStudioState.watermark = !vipStudioState.watermark;
+      btnWm.classList.toggle("active", vipStudioState.watermark);
+      applyPreviewImageEffects();
+      showToast(vipStudioState.watermark ? "👑 Đã gắn chữ ký VIP lên ảnh!" : "Đã gỡ chữ ký VIP", "info");
+    });
+  }
+
+  const bindSlider = (slider, labelEl, stateKey) => {
+    if (!slider) return;
+    slider.addEventListener("input", () => {
+      const val = parseInt(slider.value, 10) || 100;
+      vipStudioState[stateKey] = val;
+      if (labelEl) labelEl.textContent = `${val}%`;
+      applyPreviewImageEffects();
+    });
+  };
+
+  bindSlider(sB, vB, "brightness");
+  bindSlider(sC, vC, "contrast");
+  bindSlider(sS, vS, "saturate");
+
+  if (btnReset) {
+    btnReset.addEventListener("click", () => {
+      playPopSound();
+      vipStudioState.autoHdr = false;
+      vipStudioState.watermark = false;
+      vipStudioState.brightness = 100;
+      vipStudioState.contrast = 100;
+      vipStudioState.saturate = 100;
+      if (btnHdr) btnHdr.classList.remove("active");
+      if (btnWm) btnWm.classList.remove("active");
+      if (sB) sB.value = 100;
+      if (sC) sC.value = 100;
+      if (sS) sS.value = 100;
+      if (vB) vB.textContent = "100%";
+      if (vC) vC.textContent = "100%";
+      if (vS) vS.textContent = "100%";
+      applyPreviewImageEffects();
+      showToast("↺ Đã đặt lại tinh chỉnh ảnh VIP!", "info");
+    });
+  }
+}
+
+function refreshVipAppearanceEverywhere() {
+  if (state.user) {
+    renderCurrentUser();
+  } else {
+    applyVipAuraToElement(el.sidebarAvatar);
+    applyVipAuraToElement(el.mobileAvatar);
+    applyVipAuraToElement(el.profileCardAvatar);
+    const customTitle = getVipCustomTitle();
+    const profileBadge = el.profileFullName ? el.profileFullName.querySelector(".vip-crown-badge") : null;
+    if (profileBadge) {
+      profileBadge.innerHTML = `<i class="fa-solid fa-crown"></i> ${escapeHtml(customTitle)}`;
+    }
+    const vipTierEl = document.getElementById("vip-card-tier");
+    if (vipTierEl && vipTierEl.textContent !== "ROOT ADMIN") {
+      vipTierEl.textContent = customTitle === "VIP" ? "SUPREME VIP" : customTitle.toUpperCase();
+    }
+  }
+  applyPreviewImageEffects();
+  if (state.moments && state.moments.length > 0 && typeof renderFeed === "function") {
+    renderFeed();
+  }
+}
+
+function initVipCustomizerConsole() {
+  const auraBtns = document.querySelectorAll("#vip-aura-picker .vip-opt-pill[data-aura]");
+  const savedAura = getVipAuraKey();
+  auraBtns.forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.aura === savedAura);
+    btn.addEventListener("click", () => {
+      playPopSound();
+      const aura = btn.dataset.aura || "gold";
+      localStorage.setItem("locket_vip_aura", aura);
+      auraBtns.forEach(b => b.classList.toggle("active", b === btn));
+      refreshVipAppearanceEverywhere();
+      showToast(`✨ Đã đổi Hào Quang Avatar: ${btn.textContent.trim()}`, "success");
+    });
+  });
+
+  const titleInput = document.getElementById("vip-custom-title-input");
+  const btnSaveTitle = document.getElementById("btn-save-vip-title");
+  const presetTitleBtns = document.querySelectorAll(".vip-title-preset-btn[data-title]");
+
+  const syncTitleUI = (title) => {
+    if (titleInput) titleInput.value = title;
+    presetTitleBtns.forEach(b => {
+      b.classList.toggle("active", b.dataset.title === title);
+    });
+  };
+
+  const applyNewTitle = (rawTitle) => {
+    const clean = cleanDisplayName(rawTitle).slice(0, 16) || "VIP";
+    localStorage.setItem("locket_vip_title", clean);
+    syncTitleUI(clean);
+    refreshVipAppearanceEverywhere();
+    showToast(`👑 Đã cập nhật danh hiệu VIP: ${clean}`, "success");
+  };
+
+  syncTitleUI(getVipCustomTitle());
+
+  if (btnSaveTitle) {
+    btnSaveTitle.addEventListener("click", () => {
+      playPopSound();
+      applyNewTitle(titleInput ? titleInput.value : "VIP");
+    });
+  }
+  if (titleInput) {
+    titleInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        playPopSound();
+        applyNewTitle(titleInput.value);
+      }
+    });
+  }
+  presetTitleBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      playPopSound();
+      applyNewTitle(btn.dataset.title || "VIP");
+    });
+  });
+
+  const themePills = document.querySelectorAll("#vip-theme-pills .vip-theme-pill[data-theme-id]");
+  const savedTheme = localStorage.getItem("locket_theme") || "gold-luxury";
+  themePills.forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.themeId === savedTheme);
+    btn.addEventListener("click", () => {
+      playPopSound();
+      const tid = btn.dataset.themeId || "gold-luxury";
+      applyTheme(tid);
+      showToast(`🎨 Đã chuyển chủ đề: ${btn.textContent.trim()}`, "info");
+    });
+  });
+}
+
+function initVipBatchDownloader() {
+  const btnBatch = document.getElementById("btn-vip-batch-download");
+  if (!btnBatch) return;
+  btnBatch.addEventListener("click", () => {
+    playPopSound();
+    const list = (state.moments || []).filter(m => m.image_url || m.video_url).slice(0, 8);
+    if (list.length === 0) {
+      showToast("Chưa có khoảnh khắc nào trong Bảng Tin để tải hàng loạt!", "info");
+      return;
+    }
+    showToast(`👑 Đang tải hàng loạt ${list.length} khoảnh khắc Ultra HD...`, "success");
+    list.forEach((m, idx) => {
+      setTimeout(() => {
+        downloadHdMedia(m.image_url || m.video_url, `locket-vip-hd-${m.moment_uid}`);
+      }, idx * 450);
+    });
+  });
+}
+
+function initChatVipQuickBar() {
+  const chips = document.querySelectorAll("#chat-vip-quick-bar .chat-vip-chip[data-msg]");
+  chips.forEach(btn => {
+    btn.addEventListener("click", () => {
+      playPopSound();
+      if (!state.activeChatPeer) {
+        showToast("Vui lòng chọn bạn bè để gửi tin nhắn nhanh!", "info");
+        return;
+      }
+      if (el.chatTextInput) {
+        el.chatTextInput.value = btn.dataset.msg || "";
+        sendChatMessage();
+      }
+    });
+  });
+}
+
 // Attach all mega feature listeners
 initFeedSearchAndFilters();
 initPolaroidListeners();
@@ -5033,6 +5486,10 @@ initClipboardPaste();
 initSmartCaptionTools();
 initCollageStudio();
 initFeedLayoutToggle();
+initVipStudioEnhancer();
+initVipCustomizerConsole();
+initVipBatchDownloader();
+initChatVipQuickBar();
 
 // Hook favorites and streak on load
 const origRenderCurrentUser = renderCurrentUser;

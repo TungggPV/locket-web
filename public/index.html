@@ -202,6 +202,12 @@
                 <i class="fa-solid fa-grip"></i>
                 <span>Lưới gọn</span>
               </button>
+
+              <!-- VIP Batch HD Downloader -->
+              <button id="btn-vip-batch-download" class="btn btn-gold btn-sm" title="Tải hàng loạt ảnh/video gốc Ultra HD (Đặc quyền VIP)">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+                <span>Tải Hàng Loạt VIP</span>
+              </button>
             </div>
           </div>
 
@@ -270,6 +276,7 @@
                   <img id="preview-image" class="preview-media hidden" alt="Preview Image">
                   <video id="preview-video" class="preview-media hidden" playsinline controls loop></video>
                   <div id="preview-frame-overlay" class="preview-frame-overlay hidden"></div>
+                  <div id="preview-vip-watermark" class="preview-vip-watermark hidden">👑 LOCKET VIP</div>
                   <canvas id="doodle-canvas" class="doodle-canvas hidden"></canvas>
 
                   <!-- Dynamic Overlay Live Preview -->
@@ -417,9 +424,50 @@
                 <div class="filters-pill-group" id="frames-pill-group">
                   <button type="button" class="frame-pill active" data-frame="none">Không viền</button>
                   <button type="button" class="frame-pill vip-filter-pill" data-frame="vip-gold">👑 Khung Gold VIP</button>
+                  <button type="button" class="frame-pill vip-filter-pill" data-frame="neon-cyber">⚡ Neon Cyber VIP</button>
+                  <button type="button" class="frame-pill vip-filter-pill" data-frame="cinema-vip">🎬 Điện Ảnh 21:9 VIP</button>
                   <button type="button" class="frame-pill" data-frame="camcorder">📼 Camcorder REC</button>
                   <button type="button" class="frame-pill" data-frame="polaroid-mini">🤍 Viền Trắng Ngày Tháng</button>
                   <button type="button" class="frame-pill" data-frame="timestamp">🕒 Tem Giờ Hiện Tại</button>
+                </div>
+              </div>
+
+              <!-- VIP Studio Pro Image Enhancer & Gold Watermark -->
+              <div class="vip-studio-pro-box">
+                <div class="vip-studio-pro-header">
+                  <div class="vip-studio-pro-title">
+                    <i class="fa-solid fa-crown"></i>
+                    <span>Tinh Chỉnh Ảnh & Đóng Dấu VIP</span>
+                    <span class="vip-badge-pill">PRO</span>
+                  </div>
+                  <div class="vip-studio-pro-actions">
+                    <button type="button" class="vip-toggle-pill" id="btn-vip-auto-hdr">✨ Auto HDR 4K</button>
+                    <button type="button" class="vip-toggle-pill" id="btn-vip-watermark">👑 Đóng dấu chữ ký VIP</button>
+                    <button type="button" class="vip-toggle-pill" id="btn-reset-vip-adjust">↺ Đặt lại</button>
+                  </div>
+                </div>
+                <div class="vip-sliders-grid">
+                  <div class="vip-slider-item">
+                    <div class="vip-slider-label">
+                      <span><i class="fa-solid fa-sun text-yellow"></i> Độ sáng</span>
+                      <span id="val-vip-brightness">100%</span>
+                    </div>
+                    <input type="range" id="vip-slider-brightness" min="70" max="140" value="100">
+                  </div>
+                  <div class="vip-slider-item">
+                    <div class="vip-slider-label">
+                      <span><i class="fa-solid fa-circle-half-stroke text-yellow"></i> Tương phản</span>
+                      <span id="val-vip-contrast">100%</span>
+                    </div>
+                    <input type="range" id="vip-slider-contrast" min="70" max="150" value="100">
+                  </div>
+                  <div class="vip-slider-item">
+                    <div class="vip-slider-label">
+                      <span><i class="fa-solid fa-palette text-yellow"></i> Độ tươi màu</span>
+                      <span id="val-vip-saturate">100%</span>
+                    </div>
+                    <input type="range" id="vip-slider-saturate" min="50" max="170" value="100">
+                  </div>
                 </div>
               </div>
 
@@ -677,6 +725,16 @@
               </div>
             </div>
 
+            <!-- VIP 1-Tap Quick Chat Replies -->
+            <div id="chat-vip-quick-bar" class="chat-vip-quick-bar hidden">
+              <button type="button" class="chat-vip-chip" data-msg="👑 Đỉnh quá!">👑 Đỉnh quá!</button>
+              <button type="button" class="chat-vip-chip" data-msg="❤️ Thả tim nè">❤️ Thả tim nè</button>
+              <button type="button" class="chat-vip-chip" data-msg="📸 Gửi Locket đi!">📸 Gửi Locket đi!</button>
+              <button type="button" class="chat-vip-chip" data-msg="☕ Đi cafe hong?">☕ Đi cafe hong?</button>
+              <button type="button" class="chat-vip-chip" data-msg="🍜 Đói bụng quá">🍜 Đói bụng quá</button>
+              <button type="button" class="chat-vip-chip" data-msg="✨ Chill thôi">✨ Chill thôi</button>
+            </div>
+
             <!-- Message Input Bar -->
             <div id="chat-input-bar" class="chat-input-bar hidden">
               <input type="text" id="chat-text-input" placeholder="Nhập tin nhắn..." autocomplete="off">
@@ -849,6 +907,47 @@
                       </div>
                     </div>
                   </div>
+
+                  <!-- VIP Customization Console: Avatar Aura, Custom Title & Themes -->
+                  <div class="vip-customizer-console" id="vip-customizer-console">
+                    <div class="vip-customizer-block">
+                      <span class="vip-console-label"><i class="fa-solid fa-circle-dot text-yellow"></i> Hào quang Avatar VIP</span>
+                      <div class="vip-pills-wrap" id="vip-aura-picker">
+                        <button type="button" class="vip-opt-pill active" data-aura="gold">👑 Hoàng Kim 24K</button>
+                        <button type="button" class="vip-opt-pill" data-aura="rainbow">🌈 Cầu Vồng Neon 360°</button>
+                        <button type="button" class="vip-opt-pill" data-aura="emerald">🐉 Ngọc Lục Bảo</button>
+                        <button type="button" class="vip-opt-pill" data-aura="ice">❄️ Băng Tuyết Hoàng Gia</button>
+                      </div>
+                    </div>
+
+                    <div class="vip-customizer-block">
+                      <span class="vip-console-label"><i class="fa-solid fa-crown text-yellow"></i> Danh hiệu VIP cá nhân hóa</span>
+                      <div class="vip-title-editor-row">
+                        <input type="text" id="vip-custom-title-input" placeholder="Ví dụ: SUPREME VIP, FOUNDER..." maxlength="16">
+                        <button type="button" id="btn-save-vip-title" class="btn btn-gold btn-sm">Lưu danh hiệu</button>
+                      </div>
+                      <div class="vip-pills-wrap" style="margin-top:6px;">
+                        <button type="button" class="vip-title-preset-btn" data-title="VIP">👑 VIP</button>
+                        <button type="button" class="vip-title-preset-btn" data-title="SUPREME VIP">💎 SUPREME</button>
+                        <button type="button" class="vip-title-preset-btn" data-title="FOUNDER">⚡ FOUNDER</button>
+                        <button type="button" class="vip-title-preset-btn" data-title="CHÍNH CHỦ">🌟 CHÍNH CHỦ</button>
+                      </div>
+                    </div>
+
+                    <div class="vip-customizer-block">
+                      <span class="vip-console-label"><i class="fa-solid fa-palette text-yellow"></i> Chọn nhanh Chủ Đề VIP</span>
+                      <div class="vip-pills-wrap" id="vip-theme-pills">
+                        <button type="button" class="vip-theme-pill" data-theme-id="gold-luxury">👑 Hoàng Kim 24K</button>
+                        <button type="button" class="vip-theme-pill" data-theme-id="cyber-vip">⚡ Cyber Neon VIP</button>
+                        <button type="button" class="vip-theme-pill" data-theme-id="emerald-vip">💎 Ngọc Lục Bảo VIP</button>
+                        <button type="button" class="vip-theme-pill" data-theme-id="purple">🔮 Tím Midnight</button>
+                        <button type="button" class="vip-theme-pill" data-theme-id="blue">💙 Đại Dương</button>
+                        <button type="button" class="vip-theme-pill" data-theme-id="pink">🌸 Hồng Sakura</button>
+                        <button type="button" class="vip-theme-pill" data-theme-id="amoled">🖤 AMOLED Đen</button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="vip-card-actions">
                     <button type="button" id="btn-download-vip-card" class="btn btn-gold btn-block">
                       <i class="fa-solid fa-download"></i> Tải Thẻ Hội Viên VIP (PNG)
@@ -1039,6 +1138,7 @@
           <button class="story-reaction-btn" data-emoji="🥰">🥰</button>
           <button class="story-reaction-btn" data-emoji="🫶">🫶</button>
           <button class="story-reaction-btn" data-emoji="💛">💛</button>
+          <button id="btn-story-vip-combo" class="story-reaction-btn vip-combo-react-btn" title="Bão Cảm Xúc VIP">⚡👑</button>
         </div>
         <div class="story-reply-row">
           <input type="text" id="story-reply-input" placeholder="Gửi tin nhắn phản hồi khoảnh khắc..." autocomplete="off">
