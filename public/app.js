@@ -2652,6 +2652,13 @@ const btnTheme = document.getElementById("btn-theme-switcher");
 const btnMobileTheme = document.getElementById("btn-mobile-theme");
 if (btnTheme) btnTheme.addEventListener("click", cycleTheme);
 if (btnMobileTheme) btnMobileTheme.addEventListener("click", cycleTheme);
+const mobileAvatarBtn = document.querySelector(".mobile-user-avatar");
+if (mobileAvatarBtn) {
+  mobileAvatarBtn.addEventListener("click", () => {
+    playPopSound();
+    switchTab("profile");
+  });
+}
 initTheme();
 
 // ================= PHOTO FILTERS, FRAMES & MUSIC STICKER IN STUDIO ================= //

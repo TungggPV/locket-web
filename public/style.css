@@ -4512,4 +4512,685 @@ input:focus, .form-select:focus {
   white-space: nowrap;
 }
 
+/* ==========================================================================
+   MOBILE PHONE OPTIMIZATION (360px - 768px & iOS/Android Safe Area)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .app-layout {
+    padding-left: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+
+  .main-content {
+    width: 100%;
+    max-width: 100%;
+    padding: 12px 12px calc(82px + env(safe-area-inset-bottom, 0px)) 12px;
+  }
+
+  /* Sticky Translucent Mobile Header */
+  .mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 950;
+    margin: -12px -12px 14px -12px;
+    padding: max(10px, env(safe-area-inset-top, 10px)) 14px 10px 14px;
+    background: rgba(15, 17, 21, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .mobile-brand {
+    font-size: 16px;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .mobile-user-avatar {
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-user-avatar .avatar-circle {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Safe-area Fixed Bottom Navigation Bar */
+  .mobile-nav-bar {
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+    padding: 4px 4px env(safe-area-inset-bottom, 0px) 4px;
+    background: rgba(15, 17, 21, 0.94);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .mobile-nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 2px;
+    font-size: 10.5px;
+    gap: 3px;
+    border-radius: 10px;
+  }
+
+  .mobile-nav-item i {
+    font-size: 17px;
+  }
+
+  .mobile-nav-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Prevent iOS Safari input auto-zoom & constrain input width */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  select.filter-select,
+  .form-select {
+    font-size: 16px !important;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Toast Stack for Mobile */
+  .toast-container {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .toast {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 13px;
+    padding: 10px 14px;
+    max-width: 100%;
+  }
+
+  /* Auth Screen on Mobile */
+  .auth-screen {
+    padding: 14px;
+    align-items: center;
+    overflow-y: auto;
+  }
+
+  .auth-card {
+    padding: 24px 18px;
+    max-height: 92dvh;
+    overflow-y: auto;
+    border-radius: 22px;
+  }
+
+  .auth-logo {
+    margin-bottom: 20px;
+  }
+
+  .locket-logo-circle {
+    width: 56px;
+    height: 56px;
+    font-size: 26px;
+  }
+
+  /* Headers */
+  .feed-header,
+  .friends-header,
+  .memories-header {
+    margin-bottom: 14px;
+    gap: 10px;
+  }
+
+  h2 {
+    font-size: 20px;
+  }
+
+  .section-desc {
+    font-size: 12.5px;
+  }
+
+  /* Tab 1: Feed */
+  .feed-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+  }
+
+  .feed-actions .filter-select,
+  .feed-actions .btn {
+    width: 100%;
+    min-width: 0;
+    padding: 9px 10px;
+    font-size: 13px !important;
+  }
+
+  .feed-toolbar {
+    padding: 12px;
+    margin-bottom: 14px;
+    gap: 10px;
+  }
+
+  .search-input-wrap {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .feed-toolbar-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+    gap: 6px;
+  }
+
+  .feed-toolbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .feed-toolbar-actions > * {
+    flex-shrink: 0;
+  }
+
+  .stories-section {
+    margin-bottom: 14px;
+  }
+
+  .story-circle-item {
+    width: 64px;
+  }
+
+  .story-avatar-ring {
+    width: 58px;
+    height: 58px;
+  }
+
+  .feed-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .feed-grid.compact-mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .moment-header {
+    padding: 12px 14px;
+  }
+
+  .author-info {
+    min-width: 0;
+  }
+
+  .author-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px;
+    word-break: break-word;
+  }
+
+  .moment-footer {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .quick-reactions-bar {
+    padding: 5px 8px;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .quick-reactions-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .reaction-emoji-btn {
+    font-size: 19px;
+    padding: 3px;
+    flex-shrink: 0;
+  }
+
+  .moment-meta-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Tab 2: Post Studio */
+  .post-studio {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .preview-column {
+    position: static;
+    max-width: 100%;
+    margin-bottom: 0;
+  }
+
+  .phone-frame {
+    width: 100%;
+    max-width: 300px;
+    min-height: 410px;
+    border-radius: 36px;
+    border-width: 5px;
+    padding: 10px 10px 14px;
+    margin: 0 auto;
+  }
+
+  .controls-card {
+    padding: 16px 14px;
+    gap: 14px;
+    border-radius: 18px;
+  }
+
+  .upload-zone {
+    padding: 18px 12px;
+  }
+
+  .filters-pill-group,
+  .quick-stickers-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .filters-pill-group::-webkit-scrollbar,
+  .quick-stickers-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sticker-chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .vip-studio-pro-box {
+    padding: 12px;
+  }
+
+  .vip-studio-pro-box.vip-locked-box {
+    padding-top: 36px;
+  }
+
+  .vip-sliders-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Tab 3: Memories Calendar */
+  .calendar-nav-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .monthly-recap-banner {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .calendar-container {
+    padding: 12px 8px;
+    border-radius: 16px;
+  }
+
+  .calendar-weekdays {
+    font-size: 11px;
+    padding-bottom: 8px;
+  }
+
+  .calendar-days-grid {
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .calendar-day-cell {
+    padding: 4px;
+    border-radius: 8px;
+  }
+
+  .day-number {
+    font-size: 10.5px;
+  }
+
+  .day-moments-count {
+    width: 15px;
+    height: 15px;
+    font-size: 8.5px;
+    bottom: 2px;
+    right: 2px;
+  }
+
+  .day-moments-section {
+    padding: 14px 12px;
+  }
+
+  .day-moments-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  /* Tab 4: Chat */
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 148px);
+    min-height: 440px;
+    border-radius: 16px;
+  }
+
+  .chat-sidebar {
+    height: auto;
+    max-height: 116px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .chat-sidebar-header {
+    padding: 10px 14px;
+  }
+
+  .chat-sidebar-header h3 {
+    font-size: 15px;
+    margin: 0;
+  }
+
+  .conversations-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 10px;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .conversations-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .conv-item {
+    min-width: 170px;
+    max-width: 210px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+
+  .conv-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .chat-main {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-header {
+    padding: 10px 14px;
+  }
+
+  .chat-messages-wrap {
+    padding: 12px;
+  }
+
+  .msg-bubble-wrap {
+    max-width: 84%;
+  }
+
+  .chat-vip-quick-bar {
+    padding: 8px 12px;
+  }
+
+  .chat-input-bar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  /* Tab 5: Friends */
+  .friends-header .search-wrap,
+  .friends-header .search-wrap input {
+    width: 100%;
+  }
+
+  .add-friend-card {
+    padding: 14px;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .add-friend-form {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .add-friend-form input,
+  .add-friend-form button {
+    width: 100%;
+    flex: none;
+  }
+
+  .friends-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .friend-card {
+    padding: 12px 14px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .friend-card-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .friend-card-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Tab 6: Profile, VIP Card & Admin Panel */
+  .profile-banner {
+    height: 100px;
+  }
+
+  .profile-avatar-wrapper {
+    left: 16px;
+    bottom: -32px;
+  }
+
+  .profile-avatar {
+    width: 76px;
+    height: 76px;
+    border-width: 3px;
+  }
+
+  .profile-body {
+    padding: 42px 14px 18px 14px;
+  }
+
+  .profile-badges {
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .vip-gold-card {
+    padding: 16px;
+    min-height: 185px;
+    border-radius: 18px;
+  }
+
+  .vip-card-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .vip-card-number {
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .vip-card-details {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .vip-card-val {
+    font-size: 11.5px;
+  }
+
+  .vip-locked-gate-box,
+  .vip-privileges-box,
+  .admin-vip-manager-panel {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .vip-locked-identity-row,
+  .vip-redeem-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vip-locked-identity-row button,
+  .vip-redeem-row input,
+  .vip-redeem-row button {
+    flex: none;
+    width: 100%;
+    white-space: normal;
+    height: auto;
+  }
+
+  .admin-vip-grant-form {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-overview-grid {
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px 6px;
+  }
+
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .stat-title {
+    font-size: 11px;
+  }
+
+  .info-item {
+    flex-wrap: wrap;
+    gap: 4px;
+    word-break: break-all;
+    font-size: 13px;
+  }
+
+  /* Modals & Fullscreen Viewers */
+  .modal-backdrop {
+    padding: 10px;
+  }
+
+  .modal-box {
+    width: 100%;
+    max-width: 100%;
+    max-height: 90dvh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 18px;
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-body {
+    padding: 14px;
+    max-height: calc(90dvh - 58px);
+    overflow-y: auto;
+  }
+
+  .story-viewer-box {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .story-footer {
+    padding: 12px 14px max(18px, env(safe-area-inset-bottom, 18px)) 14px;
+  }
+
+  .slideshow-nav-btn.prev {
+    left: 8px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .slideshow-nav-btn.next {
+    right: 8px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .polaroid-actions-row,
+  .qr-modal-actions {
+    flex-direction: column;
+  }
+
+  .polaroid-actions-row button,
+  .qr-modal-actions button {
+    width: 100%;
+  }
+
+  .iphone-homescreen-frame {
+    padding: 12px 12px 18px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .feed-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .feed-actions #btn-refresh-feed {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .form-row .col {
+    flex: 1 1 100%;
+  }
+}
+
 
