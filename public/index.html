@@ -75,7 +75,7 @@
           <span class="brand-name">Locket by Tunggg</span>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="brand-tag">Web Edition</span>
-            <span class="vip-badge-pill"><i class="fa-solid fa-crown"></i> VIP</span>
+            <span class="vip-badge-pill hidden" id="sidebar-brand-vip-pill"><i class="fa-solid fa-crown"></i> VIP</span>
           </div>
         </div>
       </div>
@@ -135,7 +135,7 @@
         <div class="mobile-brand">
           <i class="fa-solid fa-camera text-yellow"></i>
           <span>Locket by Tunggg</span>
-          <span class="vip-badge-pill" style="font-size:9px;padding:2px 6px;"><i class="fa-solid fa-crown"></i> VIP</span>
+          <span class="vip-badge-pill hidden" id="mobile-brand-vip-pill" style="font-size:9px;padding:2px 6px;"><i class="fa-solid fa-crown"></i> VIP</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <button id="btn-mobile-theme" class="btn-icon" title="Đổi chủ đề giao diện">
@@ -823,13 +823,42 @@
               <p id="profile-handle" class="profile-handle">@username</p>
               <div class="profile-badges">
                 <span class="badge badge-admin hidden" id="profile-admin-badge"><i class="fa-solid fa-circle-check"></i> ADMIN TÍCH XANH</span>
-                <span class="badge badge-gold"><i class="fa-solid fa-crown text-yellow"></i> LOCKET GOLD VIP</span>
+                <span class="badge badge-gold hidden" id="profile-vip-badge"><i class="fa-solid fa-crown text-yellow"></i> LOCKET GOLD VIP</span>
+                <span class="badge badge-gray" id="profile-free-badge"><i class="fa-solid fa-lock"></i> Thành viên thường</span>
                 <span class="badge badge-gold"><i class="fa-solid fa-circle-check"></i> Đã xác thực</span>
                 <span class="badge badge-gray" id="profile-uid-badge">UID: ...</span>
               </div>
 
               <!-- LOCKET GOLD VIP MEMBERSHIP SUITE -->
               <div class="vip-gold-card-container mt-4">
+                <!-- Non-VIP Locked Gate -->
+                <div id="vip-locked-gate-box" class="vip-locked-gate-box hidden">
+                  <div class="vip-locked-header">
+                    <div class="vip-locked-icon"><i class="fa-solid fa-lock"></i></div>
+                    <div>
+                      <h4>🔒 Tài Khoản Chưa Kích Hoạt Locket Gold VIP</h4>
+                      <p>Đặc quyền Locket Gold VIP chỉ dành cho thành viên được Admin <strong>@tunggg0201</strong> cấp phép.</p>
+                    </div>
+                  </div>
+                  <div class="vip-locked-identity-row">
+                    <span id="vip-locked-user-info">@user (UID: ...)</span>
+                    <button type="button" id="btn-copy-uid-for-vip" class="btn btn-secondary btn-sm">
+                      <i class="fa-regular fa-copy"></i> Sao chép thông tin gửi Admin @tunggg0201
+                    </button>
+                  </div>
+                  <div class="vip-redeem-row">
+                    <input type="text" id="vip-redeem-code-input" placeholder="Nhập Mã Kích Hoạt VIP (VIP-TUNGGG-...)" autocomplete="off">
+                    <button type="button" id="btn-redeem-vip-code" class="btn btn-gold btn-sm">
+                      <i class="fa-solid fa-key"></i> Kích hoạt VIP
+                    </button>
+                    <button type="button" id="btn-recheck-vip-status" class="btn btn-secondary btn-sm" title="Kiểm tra lại quyền VIP từ máy chủ">
+                      <i class="fa-solid fa-rotate"></i> Kiểm tra lại quyền VIP
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Unlocked VIP Suite (Only visible to Admin & VIP-granted users) -->
+                <div id="vip-unlocked-suite" class="hidden">
                 <div class="vip-gold-card" id="vip-member-card">
                   <div class="vip-card-shine"></div>
                   <div class="vip-card-header">
@@ -857,7 +886,7 @@
                     </div>
                     <div>
                       <div class="vip-card-label">CẤP ĐỘ</div>
-                      <div class="vip-card-val text-yellow">SUPREME VIP</div>
+                      <div class="vip-card-val text-yellow" id="vip-card-tier">SUPREME VIP</div>
                     </div>
                   </div>
                 </div>
@@ -953,6 +982,51 @@
                       <i class="fa-solid fa-download"></i> Tải Thẻ Hội Viên VIP (PNG)
                     </button>
                   </div>
+                </div>
+                </div>
+
+                <!-- Exclusive Root Admin VIP Control Panel (@tunggg0201 only) -->
+                <div id="admin-vip-manager-panel" class="admin-vip-manager-panel hidden">
+                  <div class="admin-vip-panel-header">
+                    <div>
+                      <h4><i class="fa-solid fa-shield-halved"></i> Bảng Điều Khiển Admin (@tunggg0201) — Cấp &amp; Quản Lý VIP</h4>
+                      <p>Cấp quyền VIP trực tiếp theo @username / email / UID hoặc tạo mã kích hoạt VIP riêng cho từng tài khoản.</p>
+                    </div>
+                    <span class="badge-admin-verified"><i class="fa-solid fa-circle-check"></i> ROOT ADMIN</span>
+                  </div>
+
+                  <div class="admin-vip-grant-form">
+                    <select id="admin-vip-friend-select" class="filter-select">
+                      <option value="">-- Chọn nhanh từ danh sách bạn bè --</option>
+                    </select>
+                    <input type="text" id="admin-vip-identifier-input" placeholder="Nhập @username, email hoặc UID người dùng...">
+                    <select id="admin-vip-tier-select" class="filter-select">
+                      <option value="SUPREME VIP">👑 SUPREME VIP</option>
+                      <option value="LOCKET GOLD VIP">💎 LOCKET GOLD VIP</option>
+                      <option value="FOUNDER VIP">⚡ FOUNDER VIP</option>
+                    </select>
+                    <button type="button" id="btn-admin-grant-vip" class="btn btn-gold">
+                      <i class="fa-solid fa-crown"></i> Cấp Quyền VIP
+                    </button>
+                  </div>
+
+                  <div id="admin-generated-code-box" class="admin-generated-code-box hidden">
+                    <span class="admin-code-label">🔑 Mã kích hoạt VIP mới tạo (gửi cho bạn bè hoặc họ tự mở khi đăng nhập):</span>
+                    <div class="admin-code-row">
+                      <code id="admin-generated-code-text"></code>
+                      <button type="button" id="btn-copy-admin-vip-code" class="btn btn-gold btn-sm">
+                        <i class="fa-regular fa-copy"></i> Sao chép mã
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="admin-vip-list-header">
+                    <span><i class="fa-solid fa-users-gear"></i> Danh sách tài khoản đã được cấp VIP</span>
+                    <button type="button" id="btn-refresh-admin-vip-list" class="btn btn-secondary btn-sm">
+                      <i class="fa-solid fa-rotate"></i> Làm mới
+                    </button>
+                  </div>
+                  <div id="admin-vip-members-list" class="admin-vip-members-list"></div>
                 </div>
               </div>
 

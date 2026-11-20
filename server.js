@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
@@ -146,6 +147,197 @@ try {
   captionPresets = {};
 }
 
+// ================= ADMIN-GRANTED VIP ENGINE ================= //
+const VIP_DATA_PATH = path.join(__dirname, "vip_members.json");
+const VIP_SIGNING_SECRET = process.env.VIP_SIGNING_SECRET || "locket-by-tunggg-0201-supreme-vip-secret-key-2026";
+const ADMIN_USERNAMES = new Set(["tunggg0201", "tungggpv"]);
+const ADMIN_EMAILS = new Set(["tungpham020105@gmail.com"]);
+
+const vipRegistry = new Map();
+const revokedIdentifiers = new Set();
+
+function normalizeId(val) {
+  return String(val || "").trim().toLowerCase().replace(/^@/, "");
+}
+
+function loadVipRegistryFromDisk() {
+  try {
+    if (!fs.existsSync(VIP_DATA_PATH)) return;
+    const raw = JSON.parse(fs.readFileSync(VIP_DATA_PATH, "utf8"));
+    if (Array.isArray(raw.members)) {
+      raw.members.forEach((m) => {
+        const key = normalizeId(m && m.identifier);
+        if (key) {
+          vipRegistry.set(key, {
+            identifier: key,
+            label: m.label || key,
+            tier: m.tier || "SUPREME VIP",
+            grantedBy: m.grantedBy || "tunggg0201",
+            grantedAt: m.grantedAt || new Date().toISOString(),
+            vipCode: m.vipCode || ""
+          });
+        }
+      });
+    }
+    if (Array.isArray(raw.revoked)) {
+      raw.revoked.forEach((r) => {
+        const key = normalizeId(r);
+        if (key) revokedIdentifiers.add(key);
+      });
+    }
+  } catch (e) {
+    console.warn("[VIP Registry Load Warning]:", e.message);
+  }
+}
+
+function saveVipRegistryToDisk() {
+  try {
+    const payload = {
+      members: Array.from(vipRegistry.values()),
+      revoked: Array.from(revokedIdentifiers.values())
+    };
+    fs.writeFileSync(VIP_DATA_PATH, JSON.stringify(payload, null, 2), "utf8");
+  } catch (e) {
+    console.warn("[VIP Registry Save Warning]:", e.message);
+  }
+}
+
+loadVipRegistryFromDisk();
+
+function isServerAdmin(user, sessionEmail = "") {
+  const uname = normalizeId(user && user.username);
+  const email = normalizeId((user && user.email) || sessionEmail);
+  return (uname && ADMIN_USERNAMES.has(uname)) || (email && ADMIN_EMAILS.has(email));
+}
+
+function createSignedVipCode(identifier, tier = "SUPREME VIP") {
+  const cleanId = normalizeId(identifier) || "*";
+  const cleanTier = String(tier || "SUPREME VIP").trim() || "SUPREME VIP";
+  const payload = Buffer.from(
+    JSON.stringify({ id: cleanId, tier: cleanTier, by: "tunggg0201", ts: Date.now() }),
+    "utf8"
+  ).toString("base64url");
+  const sig = crypto
+    .createHmac("sha256", VIP_SIGNING_SECRET)
+    .update(payload)
+    .digest("base64url")
+    .slice(0, 14);
+  return `VIP-TUNGGG-${payload}.${sig}`;
+}
+
+function verifySignedVipCode(code, user, sessionEmail = "") {
+  const raw = String(code || "").trim();
+  if (!raw.startsWith("VIP-TUNGGG-")) return { valid: false };
+  const body = raw.slice("VIP-TUNGGG-".length);
+  const dotIdx = body.lastIndexOf(".");
+  if (dotIdx <= 0) return { valid: false };
+
+  const payloadB64 = body.slice(0, dotIdx);
+  const sig = body.slice(dotIdx + 1);
+  const expectedSig = crypto
+    .createHmac("sha256", VIP_SIGNING_SECRET)
+    .update(payloadB64)
+    .digest("base64url")
+    .slice(0, 14);
+
+  const sigBuf = Buffer.from(sig, "utf8");
+  const expectedBuf = Buffer.from(expectedSig, "utf8");
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return { valid: false };
+  }
+
+  try {
+    const data = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8"));
+    const targetId = normalizeId(data && data.id);
+    if (!targetId) return { valid: false };
+    if (revokedIdentifiers.has(targetId)) return { valid: false };
+
+    const userCandidates = [
+      normalizeId(user && user.username),
+      normalizeId((user && user.email) || sessionEmail),
+      normalizeId(user && user.uid)
+    ].filter(Boolean);
+
+    if (userCandidates.some((c) => revokedIdentifiers.has(c))) {
+      return { valid: false };
+    }
+    if (targetId !== "*" && !userCandidates.includes(targetId)) {
+      return { valid: false };
+    }
+    return {
+      valid: true,
+      identifier: targetId,
+      tier: data.tier || "SUPREME VIP"
+    };
+  } catch (e) {
+    return { valid: false };
+  }
+}
+
+function getVipStatusForUser(user, sessionEmail = "", headerVipToken = "") {
+  if (isServerAdmin(user, sessionEmail)) {
+    return {
+      isAdmin: true,
+      isVip: true,
+      tier: "ROOT ADMIN",
+      grantedBy: "SYSTEM"
+    };
+  }
+
+  const candidates = [
+    normalizeId(user && user.username),
+    normalizeId((user && user.email) || sessionEmail),
+    normalizeId(user && user.uid)
+  ].filter(Boolean);
+
+  for (const key of candidates) {
+    if (revokedIdentifiers.has(key)) {
+      return { isAdmin: false, isVip: false, tier: "FREE", grantedBy: null };
+    }
+  }
+
+  for (const key of candidates) {
+    const entry = vipRegistry.get(key);
+    if (entry) {
+      return {
+        isAdmin: false,
+        isVip: true,
+        tier: entry.tier || "SUPREME VIP",
+        grantedBy: entry.grantedBy || "tunggg0201",
+        grantedAt: entry.grantedAt,
+        vipCode: entry.vipCode || headerVipToken || ""
+      };
+    }
+  }
+
+  if (headerVipToken) {
+    const verified = verifySignedVipCode(headerVipToken, user, sessionEmail);
+    if (verified.valid) {
+      const storeKey = candidates[0] || verified.identifier;
+      if (storeKey && storeKey !== "*") {
+        vipRegistry.set(storeKey, {
+          identifier: storeKey,
+          label: (user && user.username) || storeKey,
+          tier: verified.tier,
+          grantedBy: "tunggg0201",
+          grantedAt: new Date().toISOString(),
+          vipCode: String(headerVipToken).trim()
+        });
+        saveVipRegistryToDisk();
+      }
+      return {
+        isAdmin: false,
+        isVip: true,
+        tier: verified.tier,
+        grantedBy: "tunggg0201",
+        vipCode: String(headerVipToken).trim()
+      };
+    }
+  }
+
+  return { isAdmin: false, isVip: false, tier: "FREE", grantedBy: null };
+}
+
 // Helper: Restore client per request from header - NEVER save to disk
 function getClient(req) {
   const header = req.headers["x-locket-session"];
@@ -207,13 +399,19 @@ app.get("/ping", (req, res) => {
 app.get("/api/auth/status", async (req, res) => {
   const client = getClient(req);
   if (!client || !client.isAuthenticated()) {
-    return res.json({ authenticated: false, user: null });
+    return res.json({ authenticated: false, user: null, vipStatus: { isAdmin: false, isVip: false, tier: "FREE" } });
   }
   try {
-    const user = await client.user.getProfile();
-    res.json({ authenticated: true, user });
+    const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
+    const vipStatus = getVipStatusForUser(user, client.session.email, req.headers["x-locket-vip-token"]);
+    res.json({ authenticated: true, user, vipStatus });
   } catch (e) {
-    res.json({ authenticated: false, user: null });
+    res.json({ authenticated: false, user: null, vipStatus: { isAdmin: false, isVip: false, tier: "FREE" } });
   }
 });
 
@@ -231,6 +429,11 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const client = new LocketClient({ sessionPath: null });
     await client.login(email.trim(), password);
     const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
 
     const sessionData = {
       uid: client.session.uid,
@@ -242,12 +445,14 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     };
 
     const sessionToken = Buffer.from(JSON.stringify(sessionData)).toString("base64");
+    const vipStatus = getVipStatusForUser(user, client.session.email, req.headers["x-locket-vip-token"]);
 
     res.json({
       success: true,
       message: "Đăng nhập thành công!",
       sessionData: sessionToken,
-      user: profile || { uid: client.session.uid, email: client.session.email }
+      user,
+      vipStatus
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -261,6 +466,152 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
 // 3. Logout
 app.post("/api/auth/logout", (req, res) => {
   res.json({ success: true, message: "Đã đăng xuất thành công." });
+});
+
+// 3b. VIP Status & Activation / Admin Grant Management
+app.get("/api/vip/status", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  try {
+    const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
+    const vipStatus = getVipStatusForUser(user, client.session.email, req.headers["x-locket-vip-token"]);
+    res.json(vipStatus);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/vip/redeem", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  const { code } = req.body || {};
+  if (!code || typeof code !== "string") {
+    return res.status(400).json({ error: "INVALID_VIP_CODE", message: "Vui lòng nhập mã kích hoạt VIP." });
+  }
+  try {
+    const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
+    const verified = verifySignedVipCode(code, user, client.session.email);
+    if (!verified.valid) {
+      return res.status(400).json({
+        error: "INVALID_VIP_CODE",
+        message: "Mã VIP không hợp lệ, đã bị thu hồi hoặc không dành cho tài khoản này."
+      });
+    }
+
+    const storeKey = normalizeId(user.username || user.email || user.uid);
+    if (storeKey) {
+      revokedIdentifiers.delete(storeKey);
+      vipRegistry.set(storeKey, {
+        identifier: storeKey,
+        label: user.username || user.first_name || storeKey,
+        tier: verified.tier,
+        grantedBy: "tunggg0201",
+        grantedAt: new Date().toISOString(),
+        vipCode: code.trim()
+      });
+      saveVipRegistryToDisk();
+    }
+    const vipStatus = getVipStatusForUser(user, client.session.email, code.trim());
+    res.json({
+      success: true,
+      message: "🎉 Kích hoạt Locket Gold VIP thành công!",
+      vipToken: code.trim(),
+      vipStatus
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/vip/list", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  try {
+    const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
+    if (!isServerAdmin(user, client.session.email)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Chỉ Admin @tunggg0201 mới có quyền truy cập." });
+    }
+    res.json({ members: Array.from(vipRegistry.values()) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/admin/vip/grant", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  const { identifier, label, tier } = req.body || {};
+  try {
+    const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
+    if (!isServerAdmin(user, client.session.email)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Chỉ Admin @tunggg0201 mới có quyền cấp VIP." });
+    }
+    const id = normalizeId(identifier);
+    if (!id || id === "*") {
+      return res.status(400).json({ error: "INVALID_IDENTIFIER", message: "Vui lòng nhập @username, email hoặc UID cụ thể của tài khoản cần cấp VIP." });
+    }
+    const cleanTier = String(tier || "SUPREME VIP").trim() || "SUPREME VIP";
+    revokedIdentifiers.delete(id);
+    const vipCode = createSignedVipCode(id, cleanTier);
+    const member = {
+      identifier: id,
+      label: String(label || identifier || id).trim(),
+      tier: cleanTier,
+      grantedBy: "tunggg0201",
+      grantedAt: new Date().toISOString(),
+      vipCode
+    };
+    vipRegistry.set(id, member);
+    saveVipRegistryToDisk();
+    res.json({ success: true, member, vipCode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/admin/vip/revoke", requireAuth, async (req, res) => {
+  const client = req.locketClient;
+  const { identifier } = req.body || {};
+  try {
+    const profile = await client.user.getProfile();
+    const user = {
+      ...(profile || {}),
+      uid: (profile && profile.uid) || client.session.uid,
+      email: (profile && profile.email) || client.session.email || ""
+    };
+    if (!isServerAdmin(user, client.session.email)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Chỉ Admin @tunggg0201 mới có quyền thu hồi VIP." });
+    }
+    const id = normalizeId(identifier);
+    if (!id) {
+      return res.status(400).json({ error: "INVALID_IDENTIFIER", message: "Thiếu định danh tài khoản cần thu hồi VIP." });
+    }
+    if (ADMIN_USERNAMES.has(id) || ADMIN_EMAILS.has(id)) {
+      return res.status(400).json({ error: "CANNOT_REVOKE_ADMIN", message: "Không thể thu hồi quyền của Root Admin @tunggg0201." });
+    }
+    vipRegistry.delete(id);
+    revokedIdentifiers.add(id);
+    saveVipRegistryToDisk();
+    res.json({ success: true, identifier: id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 4. Current User Profile

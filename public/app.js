@@ -11,7 +11,12 @@ const state = {
   activeTab: "feed",
   activeChatPeer: null,
   selectedFile: null,
-  selectedFileType: null
+  selectedFileType: null,
+  isDemoMode: false,
+  isAdmin: false,
+  isVip: false,
+  vipTier: "FREE",
+  adminVipMembers: []
 };
 
 // ================= Session Token Management (Zero Server Disk Writes) ================= //
@@ -31,9 +36,13 @@ function clearSessionToken() {
 }
 async function apiFetch(url, options = {}) {
   const token = getSessionToken();
-  const headers = options.headers || {};
+  const headers = { ...(options.headers || {}) };
   if (token) {
     headers["x-locket-session"] = token;
+  }
+  const vipToken = localStorage.getItem("locket_vip_token") || "";
+  if (vipToken) {
+    headers["x-locket-vip-token"] = vipToken;
   }
   return fetch(url, { ...options, headers });
 }
@@ -265,7 +274,8 @@ function getVipAuraKey() {
 
 function applyVipAuraToElement(avatarEl) {
   if (!avatarEl) return;
-  avatarEl.classList.remove("vip-avatar-glow", "aura-rainbow", "aura-emerald", "aura-ice");
+  avatarEl.classList.remove("vip-avatar-glow", "aura-rainbow", "aura-emerald", "aura-ice", "admin-avatar-ring");
+  if (!isCurrentUserVip()) return;
   const aura = getVipAuraKey();
   if (aura === "rainbow") avatarEl.classList.add("aura-rainbow");
   else if (aura === "emerald") avatarEl.classList.add("aura-emerald");
@@ -332,9 +342,11 @@ async function checkAuthStatus() {
     if (data.authenticated) {
       el.authScreen.classList.add("hidden");
       state.user = data.user;
+      applyVipStatusFromServer(data.vipStatus);
       renderCurrentUser();
-  updateStatsAndLeaderboard();
+      updateStatsAndLeaderboard();
       await Promise.all([loadFriends(), loadPresets()]);
+      if (state.isAdmin) loadAdminVipMembers();
       loadFeed();
     } else {
       clearSessionToken();
@@ -373,8 +385,10 @@ el.loginForm.addEventListener("submit", async e => {
       setSessionToken(data.sessionData, remember);
       el.authScreen.classList.add("hidden");
       state.user = data.user;
+      applyVipStatusFromServer(data.vipStatus);
       renderCurrentUser();
       await Promise.all([loadFriends(), loadPresets()]);
+      if (state.isAdmin) loadAdminVipMembers();
       loadFeed();
     } else {
       el.loginError.textContent = data.message || "Đăng nhập thất bại. Vui lòng thử lại.";
@@ -394,6 +408,10 @@ const btnDemoPreview = document.getElementById("btn-demo-preview");
 if (btnDemoPreview) {
   btnDemoPreview.addEventListener("click", () => {
     state.isDemoMode = true;
+    state.user = null;
+    state.isAdmin = false;
+    state.isVip = false;
+    state.vipTier = "FREE";
     el.authScreen.classList.add("hidden");
     const guestAvatar = getDefaultAvatar("Locket");
     el.sidebarAvatar.src = guestAvatar;
@@ -402,14 +420,19 @@ if (btnDemoPreview) {
     applyVipAuraToElement(el.sidebarAvatar);
     applyVipAuraToElement(el.mobileAvatar);
     applyVipAuraToElement(el.profileCardAvatar);
-    el.sidebarName.innerHTML = `<span class="user-name-text">Khách xem trước</span><span class="sidebar-vip-crown" title="Locket Gold Supreme VIP"><i class="fa-solid fa-crown"></i></span>`;
+    el.sidebarName.innerHTML = `<span class="user-name-text">Khách xem trước</span>`;
     el.sidebarUsername.textContent = "@studio_preview";
-    el.profileFullName.innerHTML = `Khách xem trước <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown"></i> ${escapeHtml(getVipCustomTitle())}</span>`;
+    el.profileFullName.textContent = "Khách xem trước";
     el.profileHandle.textContent = "@studio_preview";
+    el.profileUidBadge.textContent = "UID: Chưa đăng nhập";
     const vipHolder = document.getElementById("vip-card-holder");
-    if (vipHolder) vipHolder.textContent = "KHÁCH XEM TRƯỚC VIP";
+    if (vipHolder) vipHolder.textContent = "TÀI KHOẢN THƯỜNG";
+    if (VIP_EXCLUSIVE_THEMES.has(localStorage.getItem("locket_theme") || "")) {
+      applyTheme("gold");
+    }
+    updateVipUiLocks();
     switchTab("post");
-    showToast("✨ Chế độ xem trước Studio! Đăng nhập để kết nối bạn bè & đăng lên Locket.", "info");
+    showToast("✨ Chế độ xem trước Studio (Tài khoản thường — tính năng VIP do Admin @tunggg0201 cấp)!", "info");
   });
 }
 
@@ -433,9 +456,14 @@ async function handleLogout() {
   } catch (e) {}
   clearSessionToken();
   state.isDemoMode = false;
+  state.isAdmin = false;
+  state.isVip = false;
+  state.vipTier = "FREE";
+  state.adminVipMembers = [];
   state.user = null;
   state.friends = [];
   state.moments = [];
+  updateVipUiLocks();
   el.authScreen.classList.remove("hidden");
   showToast("Đã xóa phiên và đăng xuất thành công.", "info");
 }
@@ -444,28 +472,75 @@ el.btnProfileLogout.addEventListener("click", handleLogout);
 
 function isInitialAdminUser(user) {
   if (!user) return false;
-  const email = (user.email || "").toLowerCase();
-  const username = (user.username || "").toLowerCase();
-  const firstName = (user.first_name || "").toLowerCase();
-  const lastName = (user.last_name || "").toLowerCase();
-  const fullName = `${firstName} ${lastName}`.trim();
+  const email = String(user.email || "").trim().toLowerCase();
+  const username = String(user.username || "").trim().toLowerCase().replace(/^@/, "");
+  return username === "tunggg0201" || username === "tungggpv" || email === "tungpham020105@gmail.com";
+}
 
-  // Primary check for the user's initial account credentials
-  if (email.includes("tungpham020105") || email.includes("tungpham") || email.includes("vantung")) return true;
-  if (username.includes("tung") || username.includes("tunggg")) return true;
-  if (fullName.includes("tùng") || fullName.includes("tung")) return true;
+function isCurrentUserVip() {
+  if (state.user && isInitialAdminUser(state.user)) return true;
+  return Boolean(state.user && state.isVip);
+}
 
-  // Initial account UID binding on this browser
-  const storedAdminUid = localStorage.getItem("locket_initial_admin_uid");
-  if (!storedAdminUid && user.uid) {
-    localStorage.setItem("locket_initial_admin_uid", user.uid);
-    return true;
-  }
-  if (storedAdminUid && storedAdminUid === user.uid) {
-    return true;
-  }
-
+function requireVipAccess(featureName = "Tính năng Locket Gold VIP") {
+  if (isCurrentUserVip()) return true;
+  playPopSound();
+  showToast(`🔒 ${featureName} chỉ dành cho tài khoản VIP do Admin @tunggg0201 cấp!`, "error");
   return false;
+}
+
+function applyVipStatusFromServer(vipStatus) {
+  const isAdmin = Boolean(vipStatus && vipStatus.isAdmin) || isInitialAdminUser(state.user);
+  const isVip = isAdmin || Boolean(vipStatus && vipStatus.isVip);
+  state.isAdmin = isAdmin;
+  state.isVip = isVip;
+  state.vipTier = (vipStatus && vipStatus.tier) || (isAdmin ? "ROOT ADMIN" : (isVip ? "SUPREME VIP" : "FREE"));
+  if (vipStatus && vipStatus.vipCode) {
+    localStorage.setItem("locket_vip_token", vipStatus.vipCode);
+  }
+  const savedTheme = localStorage.getItem("locket_theme");
+  if (!isVip && savedTheme && VIP_EXCLUSIVE_THEMES.has(savedTheme)) {
+    applyTheme("gold");
+  } else if (isVip) {
+    applyTheme(savedTheme || "gold-luxury");
+  }
+}
+
+function updateVipUiLocks() {
+  const isVip = isCurrentUserVip();
+  const isAdmin = Boolean(state.user && isInitialAdminUser(state.user));
+
+  const sidebarBrandVip = document.getElementById("sidebar-brand-vip-pill");
+  const mobileBrandVip = document.getElementById("mobile-brand-vip-pill");
+  if (sidebarBrandVip) sidebarBrandVip.classList.toggle("hidden", !isVip);
+  if (mobileBrandVip) mobileBrandVip.classList.toggle("hidden", !isVip);
+
+  const profileVipBadge = document.getElementById("profile-vip-badge");
+  const profileFreeBadge = document.getElementById("profile-free-badge");
+  if (profileVipBadge) profileVipBadge.classList.toggle("hidden", !isVip);
+  if (profileFreeBadge) profileFreeBadge.classList.toggle("hidden", isVip);
+
+  const lockedGate = document.getElementById("vip-locked-gate-box");
+  const unlockedSuite = document.getElementById("vip-unlocked-suite");
+  const lockedInfo = document.getElementById("vip-locked-user-info");
+  if (lockedGate) lockedGate.classList.toggle("hidden", isVip);
+  if (unlockedSuite) unlockedSuite.classList.toggle("hidden", !isVip);
+  if (lockedInfo) {
+    if (state.user) {
+      lockedInfo.textContent = `@${state.user.username || "user"} (UID: ${state.user.uid || "..."})`;
+    } else {
+      lockedInfo.textContent = "Khách xem trước — Đăng nhập Locket để lấy @username & UID gửi Admin @tunggg0201";
+    }
+  }
+
+  const adminPanel = document.getElementById("admin-vip-manager-panel");
+  if (adminPanel) adminPanel.classList.toggle("hidden", !isAdmin);
+
+  const studioProBox = document.querySelector(".vip-studio-pro-box");
+  if (studioProBox) studioProBox.classList.toggle("vip-locked-box", !isVip);
+
+  const chatQuickBar = document.getElementById("chat-vip-quick-bar");
+  if (chatQuickBar && !isVip) chatQuickBar.classList.add("hidden");
 }
 
 function renderCurrentUser() {
@@ -474,13 +549,17 @@ function renderCurrentUser() {
   const fullName = cleanDisplayName(rawFull) || cleanDisplayName(state.user.username) || "Tôi";
   const avatarUrl = state.user.profile_picture_url || getDefaultAvatar(fullName);
   const isAdmin = isInitialAdminUser(state.user);
+  const isVip = isCurrentUserVip();
   state.isAdmin = isAdmin;
 
   const vipTitle = escapeHtml(getVipCustomTitle());
   const adminTickHtml = isAdmin
     ? ` <span class="admin-blue-tick" title="Quản trị viên đã xác minh (Admin Verified)"><i class="fa-solid fa-circle-check"></i></span> <span class="badge-admin-verified"><i class="fa-solid fa-shield-halved"></i> ADMIN</span>`
     : "";
-  const compactSidebarBadges = `${isAdmin ? '<span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>' : ""}<span class="sidebar-vip-crown" title="Locket Gold Supreme VIP"><i class="fa-solid fa-crown"></i></span>`;
+  const vipBadgeHtml = isVip
+    ? ` <span class="vip-crown-badge" title="Locket Gold VIP (Admin @tunggg0201 cấp)"><i class="fa-solid fa-crown" style="color:#ffd700;"></i> ${vipTitle}</span>`
+    : "";
+  const compactSidebarBadges = `${isAdmin ? '<span class="admin-blue-tick" title="Admin Tích Xanh"><i class="fa-solid fa-circle-check"></i></span>' : ""}${isVip ? '<span class="sidebar-vip-crown" title="Locket Gold Supreme VIP"><i class="fa-solid fa-crown"></i></span>' : ""}`;
 
   el.sidebarAvatar.src = avatarUrl;
   el.mobileAvatar.src = avatarUrl;
@@ -496,15 +575,11 @@ function renderCurrentUser() {
     el.sidebarAvatar.classList.add("admin-avatar-ring");
     el.mobileAvatar.classList.add("admin-avatar-ring");
     el.profileCardAvatar.classList.add("admin-avatar-ring");
-  } else {
-    el.sidebarAvatar.classList.remove("admin-avatar-ring");
-    el.mobileAvatar.classList.remove("admin-avatar-ring");
-    el.profileCardAvatar.classList.remove("admin-avatar-ring");
   }
 
   // Profile tab fields
   el.profileCardAvatar.src = avatarUrl;
-  el.profileFullName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml} <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown" style="color:#ffd700;"></i> ${vipTitle}</span>`;
+  el.profileFullName.innerHTML = `${escapeHtml(fullName)}${adminTickHtml}${vipBadgeHtml}`;
   el.profileHandle.textContent = `@${state.user.username || "me"}`;
   el.profileUidBadge.textContent = `UID: ${state.user.uid || "..."}`;
   el.profileFirstName.value = cleanDisplayName(state.user.first_name || "");
@@ -514,20 +589,22 @@ function renderCurrentUser() {
   // Admin Badge in Profile Badges list
   const profileAdminBadge = document.getElementById("profile-admin-badge");
   if (profileAdminBadge) {
-    if (isAdmin) {
-      profileAdminBadge.classList.remove("hidden");
-    } else {
-      profileAdminBadge.classList.add("hidden");
-    }
+    profileAdminBadge.classList.toggle("hidden", !isAdmin);
   }
 
   // VIP Card details
   const vipHolder = document.getElementById("vip-card-holder");
   const vipLast4 = document.getElementById("vip-card-last4");
+  const vipTierEl = document.getElementById("vip-card-tier");
   if (vipHolder) vipHolder.textContent = fullName.toUpperCase();
   if (vipLast4 && state.user.uid) {
     vipLast4.textContent = state.user.uid.slice(-4).toUpperCase();
   }
+  if (vipTierEl) {
+    vipTierEl.textContent = isAdmin ? "ROOT ADMIN" : (state.vipTier || "SUPREME VIP");
+  }
+
+  updateVipUiLocks();
 }
 
 // ================= Friends Management ================= //
@@ -541,6 +618,9 @@ async function loadFriends() {
     renderFriendsFilter();
     renderFriendsChecklist();
     renderFriendsGrid(state.friends);
+    if (state.isAdmin && typeof populateAdminFriendSelect === "function") {
+      populateAdminFriendSelect();
+    }
     loadFriendRequests();
   } catch (err) {
     console.error("Load friends error:", err);
@@ -608,8 +688,18 @@ function renderFriendsGrid(friendsList) {
   }
 
   el.friendsGrid.innerHTML = "";
+  const vipSet = new Set((state.adminVipMembers || []).map(m => String(m.identifier || "").toLowerCase()));
   friendsList.forEach(f => {
     const name = cleanDisplayName(`${f.first_name || ""} ${f.last_name || ""}`) || f.username || "Bạn bè";
+    const friendIdentifiers = [f.username, f.email, f.uid]
+      .map(v => String(v || "").trim().toLowerCase().replace(/^@/, ""))
+      .filter(Boolean);
+    const friendHasVip = friendIdentifiers.some(id => vipSet.has(id));
+    const grantTarget = f.username || f.uid || "";
+    const adminVipBtnHtml = state.isAdmin && grantTarget
+      ? `<button class="btn ${friendHasVip ? "btn-secondary" : "btn-gold"} btn-sm btn-friend-vip-toggle" data-vip-active="${friendHasVip ? "1" : "0"}" title="${friendHasVip ? "Thu hồi quyền VIP" : "Cấp quyền Locket Gold VIP"}">${friendHasVip ? "✅ Đã VIP" : "👑 Cấp VIP"}</button>`
+      : "";
+
     const card = document.createElement("div");
     card.className = "friend-card";
     card.innerHTML = `
@@ -619,6 +709,7 @@ function renderFriendsGrid(friendsList) {
         <span class="friend-card-handle">@${escapeHtml(f.username || "")}</span>
       </div>
       <div class="friend-card-actions">
+        ${adminVipBtnHtml}
         <button class="btn btn-secondary btn-sm btn-view-friend-feed" title="Xem khoảnh khắc bạn này">
           <i class="fa-solid fa-camera text-yellow"></i>
         </button>
@@ -630,6 +721,13 @@ function renderFriendsGrid(friendsList) {
         </button>
       </div>
     `;
+
+    const vipToggleBtn = card.querySelector(".btn-friend-vip-toggle");
+    if (vipToggleBtn) {
+      vipToggleBtn.addEventListener("click", () => {
+        adminToggleFriendVip(f, name, vipToggleBtn.dataset.vipActive === "1");
+      });
+    }
 
     card.querySelector(".btn-view-friend-feed").addEventListener("click", () => {
       el.feedFilterFriend.value = f.uid;
@@ -975,9 +1073,10 @@ function renderFeed() {
 
     // Delete button if author is me
     const isMe = author.is_me;
-    const authorIsAdmin = isMe && isInitialAdminUser(state.user);
+    const authorIsAdmin = isInitialAdminUser(author) || (isMe && isInitialAdminUser(state.user));
+    const authorIsVip = (isMe && isCurrentUserVip()) || authorIsAdmin;
     const vipAuraKey = getVipAuraKey();
-    const vipAuraClass = isMe
+    const vipAuraClass = authorIsVip
       ? (vipAuraKey === "rainbow" ? "aura-rainbow" : vipAuraKey === "emerald" ? "aura-emerald" : vipAuraKey === "ice" ? "aura-ice" : "vip-avatar-glow")
       : "";
     const vipTitleText = getVipCustomTitle();
@@ -993,7 +1092,7 @@ function renderFeed() {
         <div class="moment-author">
           <img src="${authorAvatar}" alt="${escapeHtml(authorName)}" class="author-avatar ${vipAuraClass} ${authorIsAdmin && vipAuraKey === 'gold' ? 'admin-avatar-ring' : ''}">
           <div class="author-info">
-            <span class="author-name">${escapeHtml(authorName)}${authorAdminTick}${isMe ? ` <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> ${escapeHtml(vipTitleText)}</span>` : ''}</span>
+            <span class="author-name">${escapeHtml(authorName)}${authorAdminTick}${authorIsVip ? ` <span class="vip-crown-badge" title="Locket Gold VIP"><i class="fa-solid fa-crown text-yellow"></i> ${escapeHtml(vipTitleText)}</span>` : ''}</span>
             <span class="moment-time">${timeAgo}</span>
           </div>
         </div>
@@ -1100,6 +1199,7 @@ function renderFeed() {
     const vipDownloadBtn = card.querySelector(".btn-vip-download-hd");
     if (vipDownloadBtn) {
       vipDownloadBtn.addEventListener("click", () => {
+        if (!requireVipAccess("Tải ảnh/video gốc Ultra HD 4K")) return;
         downloadHdMedia(m.image_url || m.video_url, `locket-gold-hd-${m.moment_uid}`);
       });
     }
@@ -1154,6 +1254,7 @@ function renderFeed() {
       btn.addEventListener("click", () => {
         const momentUid = btn.dataset.moment;
         if (btn.classList.contains("vip-combo-react-btn")) {
+          if (!requireVipAccess("Bão Cảm Xúc VIP")) return;
           triggerVipReactionBurst(momentUid, card);
           return;
         }
@@ -1933,7 +2034,7 @@ async function openChatWithFriend(friend) {
   el.chatHeader.classList.remove("hidden");
   el.chatInputBar.classList.remove("hidden");
   const quickBar = document.getElementById("chat-vip-quick-bar");
-  if (quickBar) quickBar.classList.remove("hidden");
+  if (quickBar) quickBar.classList.toggle("hidden", !isCurrentUserVip());
 
   // Load messages
   el.chatMessagesWrap.innerHTML = `
@@ -2435,6 +2536,7 @@ document.querySelectorAll(".story-reaction-btn").forEach(btn => {
 const btnStoryVipCombo = document.getElementById("btn-story-vip-combo");
 if (btnStoryVipCombo) {
   btnStoryVipCombo.addEventListener("click", () => {
+    if (!requireVipAccess("Bão Cảm Xúc Story VIP")) return;
     const m = activeStoryMoments[activeStoryIndex];
     if (m) {
       const floatHost = document.getElementById("story-floating-reactions") || document.getElementById("story-viewer-modal");
@@ -2495,6 +2597,7 @@ window.addEventListener("keydown", (e) => {
 
 
 // ================= THEME SWITCHER (Gold Luxury, Cyber Neon, Emerald, Classic Gold, Purple, Blue, Pink, AMOLED) ================= //
+const VIP_EXCLUSIVE_THEMES = new Set(["gold-luxury", "cyber-vip", "emerald-vip"]);
 const THEMES = [
   { id: "gold-luxury", name: "👑 Locket Gold Luxury (VIP)" },
   { id: "cyber-vip", name: "⚡ Cyber Neon VIP" },
@@ -2507,7 +2610,7 @@ const THEMES = [
 ];
 let currentThemeIndex = 0;
 
-function applyTheme(themeId) {
+function applyTheme(themeId, save = true) {
   if (themeId === "gold") {
     document.body.removeAttribute("data-theme");
   } else {
@@ -2515,25 +2618,34 @@ function applyTheme(themeId) {
   }
   const idx = THEMES.findIndex(t => t.id === themeId);
   if (idx >= 0) currentThemeIndex = idx;
-  localStorage.setItem("locket_theme", themeId);
+  if (save) localStorage.setItem("locket_theme", themeId);
   document.querySelectorAll(".vip-theme-pill").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.themeId === themeId);
   });
 }
 
 function initTheme() {
-  const savedTheme = localStorage.getItem("locket_theme") || "gold-luxury";
-  const idx = THEMES.findIndex(t => t.id === savedTheme);
+  const stored = localStorage.getItem("locket_theme");
+  if (!isCurrentUserVip() && stored && VIP_EXCLUSIVE_THEMES.has(stored)) {
+    applyTheme("gold", false);
+    return;
+  }
+  const initial = stored || (isCurrentUserVip() ? "gold-luxury" : "gold");
+  const idx = THEMES.findIndex(t => t.id === initial);
   currentThemeIndex = idx >= 0 ? idx : 0;
-  applyTheme(savedTheme);
+  applyTheme(initial, Boolean(stored));
 }
 
 function cycleTheme() {
   playPopSound();
-  currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
-  const theme = THEMES[currentThemeIndex];
-  applyTheme(theme.id);
-  showToast(`Đã chuyển sang chủ đề: ${theme.name}`, "info");
+  const availableThemes = isCurrentUserVip()
+    ? THEMES
+    : THEMES.filter(t => !VIP_EXCLUSIVE_THEMES.has(t.id));
+  const curId = localStorage.getItem("locket_theme") || "gold";
+  const curIdx = availableThemes.findIndex(t => t.id === curId);
+  const nextTheme = availableThemes[(curIdx + 1) % availableThemes.length];
+  applyTheme(nextTheme.id);
+  showToast(`Đã chuyển sang chủ đề: ${nextTheme.name}`, "info");
 }
 
 const btnTheme = document.getElementById("btn-theme-switcher");
@@ -2906,6 +3018,7 @@ async function getProcessedUploadFile() {
 
 document.querySelectorAll(".filter-pill").forEach(btn => {
   btn.addEventListener("click", () => {
+    if (btn.classList.contains("vip-filter-pill") && !requireVipAccess("Bộ lọc màu Locket Gold VIP")) return;
     playPopSound();
     document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
     btn.classList.add("active");
@@ -2929,6 +3042,7 @@ document.querySelectorAll(".filter-pill").forEach(btn => {
 
 document.querySelectorAll(".frame-pill").forEach(btn => {
   btn.addEventListener("click", () => {
+    if (btn.classList.contains("vip-filter-pill") && !requireVipAccess("Khung ảnh Locket Gold VIP")) return;
     playPopSound();
     document.querySelectorAll(".frame-pill").forEach(p => p.classList.remove("active"));
     btn.classList.add("active");
@@ -2940,6 +3054,7 @@ document.querySelectorAll(".frame-pill").forEach(btn => {
 // Quick Sticker Chips
 document.querySelectorAll(".sticker-chip").forEach(chip => {
   chip.addEventListener("click", () => {
+    if (chip.classList.contains("vip-chip") && !requireVipAccess("Sticker trạng thái Locket Gold VIP")) return;
     playPopSound();
     const text = chip.dataset.text;
     const inp = document.getElementById("moment-caption");
@@ -5286,6 +5401,7 @@ function initVipStudioEnhancer() {
 
   if (btnHdr) {
     btnHdr.addEventListener("click", () => {
+      if (!requireVipAccess("Auto HDR 4K VIP")) return;
       playPopSound();
       vipStudioState.autoHdr = !vipStudioState.autoHdr;
       btnHdr.classList.toggle("active", vipStudioState.autoHdr);
@@ -5296,6 +5412,7 @@ function initVipStudioEnhancer() {
 
   if (btnWm) {
     btnWm.addEventListener("click", () => {
+      if (!requireVipAccess("Đóng dấu chữ ký VIP")) return;
       playPopSound();
       vipStudioState.watermark = !vipStudioState.watermark;
       btnWm.classList.toggle("active", vipStudioState.watermark);
@@ -5307,6 +5424,13 @@ function initVipStudioEnhancer() {
   const bindSlider = (slider, labelEl, stateKey) => {
     if (!slider) return;
     slider.addEventListener("input", () => {
+      if (!requireVipAccess("Tinh chỉnh ảnh & Đóng dấu VIP Pro")) {
+        slider.value = 100;
+        vipStudioState[stateKey] = 100;
+        if (labelEl) labelEl.textContent = "100%";
+        applyPreviewImageEffects();
+        return;
+      }
       const val = parseInt(slider.value, 10) || 100;
       vipStudioState[stateKey] = val;
       if (labelEl) labelEl.textContent = `${val}%`;
@@ -5369,6 +5493,7 @@ function initVipCustomizerConsole() {
   auraBtns.forEach(btn => {
     btn.classList.toggle("active", btn.dataset.aura === savedAura);
     btn.addEventListener("click", () => {
+      if (!requireVipAccess("Hào quang Avatar VIP")) return;
       playPopSound();
       const aura = btn.dataset.aura || "gold";
       localStorage.setItem("locket_vip_aura", aura);
@@ -5390,6 +5515,7 @@ function initVipCustomizerConsole() {
   };
 
   const applyNewTitle = (rawTitle) => {
+    if (!requireVipAccess("Danh hiệu VIP cá nhân hóa")) return;
     const clean = cleanDisplayName(rawTitle).slice(0, 16) || "VIP";
     localStorage.setItem("locket_vip_title", clean);
     syncTitleUI(clean);
@@ -5422,12 +5548,13 @@ function initVipCustomizerConsole() {
   });
 
   const themePills = document.querySelectorAll("#vip-theme-pills .vip-theme-pill[data-theme-id]");
-  const savedTheme = localStorage.getItem("locket_theme") || "gold-luxury";
+  const savedTheme = localStorage.getItem("locket_theme") || (isCurrentUserVip() ? "gold-luxury" : "gold");
   themePills.forEach(btn => {
     btn.classList.toggle("active", btn.dataset.themeId === savedTheme);
     btn.addEventListener("click", () => {
-      playPopSound();
       const tid = btn.dataset.themeId || "gold-luxury";
+      if (VIP_EXCLUSIVE_THEMES.has(tid) && !requireVipAccess("Chủ đề Locket Gold VIP")) return;
+      playPopSound();
       applyTheme(tid);
       showToast(`🎨 Đã chuyển chủ đề: ${btn.textContent.trim()}`, "info");
     });
@@ -5438,6 +5565,7 @@ function initVipBatchDownloader() {
   const btnBatch = document.getElementById("btn-vip-batch-download");
   if (!btnBatch) return;
   btnBatch.addEventListener("click", () => {
+    if (!requireVipAccess("Tải hàng loạt Ultra HD VIP")) return;
     playPopSound();
     const list = (state.moments || []).filter(m => m.image_url || m.video_url).slice(0, 8);
     if (list.length === 0) {
@@ -5457,6 +5585,7 @@ function initChatVipQuickBar() {
   const chips = document.querySelectorAll("#chat-vip-quick-bar .chat-vip-chip[data-msg]");
   chips.forEach(btn => {
     btn.addEventListener("click", () => {
+      if (!requireVipAccess("Phản hồi nhanh VIP")) return;
       playPopSound();
       if (!state.activeChatPeer) {
         showToast("Vui lòng chọn bạn bè để gửi tin nhắn nhanh!", "info");
@@ -5468,6 +5597,259 @@ function initChatVipQuickBar() {
       }
     });
   });
+}
+
+// ================= 9. ADMIN-ONLY VIP GRANTING & USER ACTIVATION ================= //
+function populateAdminFriendSelect() {
+  const sel = document.getElementById("admin-vip-friend-select");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">-- Chọn nhanh từ danh sách bạn bè --</option>`;
+  (state.friends || []).forEach(f => {
+    const val = f.username || f.uid || "";
+    if (!val) return;
+    const name = cleanDisplayName(`${f.first_name || ""} ${f.last_name || ""}`) || f.username || f.uid;
+    const opt = document.createElement("option");
+    opt.value = val;
+    opt.textContent = `${name}${f.username ? ` (@${f.username})` : ""}`;
+    sel.appendChild(opt);
+  });
+}
+
+function showAdminGeneratedCode(code) {
+  const box = document.getElementById("admin-generated-code-box");
+  const codeText = document.getElementById("admin-generated-code-text");
+  if (!box || !codeText) return;
+  if (!code) {
+    box.classList.add("hidden");
+    codeText.textContent = "";
+    return;
+  }
+  codeText.textContent = code;
+  box.classList.remove("hidden");
+}
+
+function renderAdminVipMembersList() {
+  const listEl = document.getElementById("admin-vip-members-list");
+  if (!listEl) return;
+  const members = state.adminVipMembers || [];
+  if (members.length === 0) {
+    listEl.innerHTML = `<div class="chat-empty" style="padding:14px;">Chưa có tài khoản nào được cấp VIP. Hãy chọn bạn bè hoặc nhập @username ở trên để cấp!</div>`;
+    return;
+  }
+  listEl.innerHTML = "";
+  members.forEach(m => {
+    const row = document.createElement("div");
+    row.className = "admin-vip-member-row";
+    const dateStr = m.grantedAt ? new Date(m.grantedAt).toLocaleDateString("vi-VN") : "";
+    row.innerHTML = `
+      <div class="admin-vip-member-info">
+        <strong>👑 ${escapeHtml(m.label || m.identifier)} <span class="vip-badge-pill" style="margin-left:4px;">${escapeHtml(m.tier || "SUPREME VIP")}</span></strong>
+        <span>Định danh: @${escapeHtml(m.identifier)}${dateStr ? ` · Cấp ngày ${dateStr}` : ""}</span>
+      </div>
+      <div class="admin-vip-member-actions">
+        ${m.vipCode ? `<button type="button" class="btn btn-secondary btn-sm btn-copy-member-code"><i class="fa-regular fa-copy"></i> Mã VIP</button>` : ""}
+        <button type="button" class="btn btn-secondary btn-sm text-danger btn-revoke-member"><i class="fa-solid fa-ban"></i> Thu hồi</button>
+      </div>
+    `;
+    const btnCopy = row.querySelector(".btn-copy-member-code");
+    if (btnCopy) {
+      btnCopy.addEventListener("click", () => {
+        navigator.clipboard.writeText(m.vipCode);
+        showAdminGeneratedCode(m.vipCode);
+        showToast(`📋 Đã sao chép mã VIP cho ${m.identifier}!`, "success");
+      });
+    }
+    const btnRevoke = row.querySelector(".btn-revoke-member");
+    if (btnRevoke) {
+      btnRevoke.addEventListener("click", () => {
+        revokeVipByIdentifier(m.identifier);
+      });
+    }
+    listEl.appendChild(row);
+  });
+}
+
+async function loadAdminVipMembers() {
+  if (!state.user || !isInitialAdminUser(state.user)) return;
+  try {
+    const res = await apiFetch("/api/admin/vip/list");
+    const data = await res.json();
+    if (res.ok && Array.isArray(data.members)) {
+      state.adminVipMembers = data.members;
+      renderAdminVipMembersList();
+      if (state.friends && state.friends.length > 0) {
+        renderFriendsGrid(state.friends);
+      }
+    }
+  } catch (e) {}
+}
+
+async function grantVipByIdentifier(identifier, label = "", tier = "SUPREME VIP") {
+  const clean = String(identifier || "").trim();
+  if (!clean) {
+    showToast("Vui lòng nhập @username, email hoặc UID tài khoản cần cấp VIP!", "error");
+    return;
+  }
+  try {
+    const res = await apiFetch("/api/admin/vip/grant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: clean, label: label || clean, tier })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showAdminGeneratedCode(data.vipCode);
+      showToast(`👑 Đã cấp quyền ${tier} cho ${clean}!`, "success");
+      await loadAdminVipMembers();
+    } else {
+      showToast(data.message || data.error || "Không thể cấp VIP.", "error");
+    }
+  } catch (e) {
+    showToast("Lỗi cấp VIP: " + e.message, "error");
+  }
+}
+
+async function revokeVipByIdentifier(identifier) {
+  const clean = String(identifier || "").trim();
+  if (!clean) return;
+  try {
+    const res = await apiFetch("/api/admin/vip/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: clean })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`Đã thu hồi quyền VIP của ${clean}.`, "info");
+      await loadAdminVipMembers();
+    } else {
+      showToast(data.message || data.error || "Không thể thu hồi VIP.", "error");
+    }
+  } catch (e) {
+    showToast("Lỗi thu hồi VIP: " + e.message, "error");
+  }
+}
+
+async function adminToggleFriendVip(friend, displayName, currentlyVip) {
+  const targetId = friend.username || friend.uid;
+  if (!targetId) return;
+  if (currentlyVip) {
+    await revokeVipByIdentifier(targetId);
+  } else {
+    await grantVipByIdentifier(targetId, `${displayName}${friend.username ? ` (@${friend.username})` : ""}`, "SUPREME VIP");
+  }
+}
+
+function initAdminVipManager() {
+  // User-side VIP Gate buttons
+  const btnCopyInfo = document.getElementById("btn-copy-uid-for-vip");
+  const btnRedeem = document.getElementById("btn-redeem-vip-code");
+  const redeemInput = document.getElementById("vip-redeem-code-input");
+  const btnRecheck = document.getElementById("btn-recheck-vip-status");
+
+  if (btnCopyInfo) {
+    btnCopyInfo.addEventListener("click", () => {
+      if (!state.user) {
+        showToast("Vui lòng đăng nhập tài khoản Locket trước để lấy thông tin cấp VIP!", "info");
+        return;
+      }
+      const info = `@${state.user.username || ""} | UID: ${state.user.uid || ""} | Email: ${state.user.email || ""}`;
+      navigator.clipboard.writeText(info);
+      showToast("📋 Đã sao chép thông tin! Hãy gửi cho Admin @tunggg0201 để được cấp VIP.", "success");
+    });
+  }
+
+  if (btnRedeem) {
+    btnRedeem.addEventListener("click", async () => {
+      const code = redeemInput ? redeemInput.value.trim() : "";
+      if (!state.user || !getSessionToken()) {
+        showToast("Vui lòng đăng nhập tài khoản Locket trước khi kích hoạt mã VIP!", "error");
+        return;
+      }
+      if (!code) {
+        showToast("Vui lòng nhập Mã Kích Hoạt VIP do Admin @tunggg0201 cấp!", "error");
+        return;
+      }
+      try {
+        const res = await apiFetch("/api/vip/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.vipToken) localStorage.setItem("locket_vip_token", data.vipToken);
+          applyVipStatusFromServer(data.vipStatus);
+          renderCurrentUser();
+          if (state.moments && state.moments.length > 0) renderFeed();
+          if (redeemInput) redeemInput.value = "";
+          showToast(data.message || "🎉 Kích hoạt Locket Gold VIP thành công!", "success");
+        } else {
+          showToast(data.message || "Mã VIP không hợp lệ hoặc không thuộc tài khoản này.", "error");
+        }
+      } catch (e) {
+        showToast("Lỗi kích hoạt VIP: " + e.message, "error");
+      }
+    });
+  }
+
+  if (btnRecheck) {
+    btnRecheck.addEventListener("click", async () => {
+      if (!state.user || !getSessionToken()) {
+        showToast("Vui lòng đăng nhập để kiểm tra quyền VIP từ Admin @tunggg0201!", "info");
+        return;
+      }
+      try {
+        const res = await apiFetch("/api/vip/status");
+        const vipStatus = await res.json();
+        applyVipStatusFromServer(vipStatus);
+        renderCurrentUser();
+        if (isCurrentUserVip()) {
+          showToast("👑 Tài khoản của bạn đã được Admin @tunggg0201 cấp Locket Gold VIP!", "success");
+        } else {
+          showToast("Tài khoản chưa được cấp VIP. Hãy liên hệ Admin @tunggg0201!", "info");
+        }
+      } catch (e) {
+        showToast("Không thể kiểm tra quyền VIP lúc này.", "error");
+      }
+    });
+  }
+
+  // Admin-side VIP Control Panel (@tunggg0201 only)
+  const friendSel = document.getElementById("admin-vip-friend-select");
+  const idInput = document.getElementById("admin-vip-identifier-input");
+  const tierSel = document.getElementById("admin-vip-tier-select");
+  const btnGrant = document.getElementById("btn-admin-grant-vip");
+  const btnCopyGen = document.getElementById("btn-copy-admin-vip-code");
+  const btnRefreshList = document.getElementById("btn-refresh-admin-vip-list");
+
+  if (friendSel && idInput) {
+    friendSel.addEventListener("change", () => {
+      if (friendSel.value) idInput.value = friendSel.value;
+    });
+  }
+  if (btnGrant) {
+    btnGrant.addEventListener("click", () => {
+      const id = idInput ? idInput.value.trim() : "";
+      const tier = tierSel ? tierSel.value : "SUPREME VIP";
+      const optLabel = friendSel && friendSel.selectedIndex > 0 ? friendSel.options[friendSel.selectedIndex].text : "";
+      grantVipByIdentifier(id, optLabel || id, tier);
+    });
+  }
+  if (btnCopyGen) {
+    btnCopyGen.addEventListener("click", () => {
+      const codeEl = document.getElementById("admin-generated-code-text");
+      if (codeEl && codeEl.textContent) {
+        navigator.clipboard.writeText(codeEl.textContent);
+        showToast("📋 Đã sao chép mã VIP!", "success");
+      }
+    });
+  }
+  if (btnRefreshList) {
+    btnRefreshList.addEventListener("click", () => {
+      loadAdminVipMembers();
+    });
+  }
 }
 
 // Attach all mega feature listeners
@@ -5490,6 +5872,8 @@ initVipStudioEnhancer();
 initVipCustomizerConsole();
 initVipBatchDownloader();
 initChatVipQuickBar();
+initAdminVipManager();
+updateVipUiLocks();
 
 // Hook favorites and streak on load
 const origRenderCurrentUser = renderCurrentUser;

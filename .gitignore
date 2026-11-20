@@ -8,3 +8,4 @@ chat_history.json
 .vercel
 .env*
 uploads/
+vip_members.json
